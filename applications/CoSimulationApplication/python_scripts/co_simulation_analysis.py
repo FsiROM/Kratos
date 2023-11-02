@@ -9,6 +9,8 @@ import KratosMultiphysics.CoSimulationApplication.colors as colors
 
 # Other imports
 import sys
+import time
+import numpy as np
 
 class CoSimulationAnalysis(AnalysisStage):
     """AnalysisStage of the CoSimulationApplication.
@@ -57,6 +59,7 @@ class CoSimulationAnalysis(AnalysisStage):
         self._GetSolver() # this creates the solver
 
     def Initialize(self):
+        self.solver_time = []
         self._GetSolver().Initialize()
         self._GetSolver().Check()
 
@@ -70,11 +73,16 @@ class CoSimulationAnalysis(AnalysisStage):
 
         if self.flush_stdout:
             CoSimulationAnalysis.Flush()
+        self.tstart = time.time()
 
     def Finalize(self):
         self._GetSolver().Finalize()
+        t1 = time.time()
+        with open("./coSimData/total_solving_time.npy", 'wb') as f:
+            np.save(f, np.array([t1 - self.tstart]))
 
     def InitializeSolutionStep(self):
+        self.t0 = time.time()
         self.step += 1
         cs_tools.cs_print_info(colors.bold("\ntime={0:.12g}".format(self.time)+ " | step="+ str(self.step)))
 
@@ -82,6 +90,10 @@ class CoSimulationAnalysis(AnalysisStage):
 
     def FinalizeSolutionStep(self):
         self._GetSolver().FinalizeSolutionStep()
+        t1 = time.time()
+        self.solver_time.append(t1 - self.t0)
+        with open("./coSimData/increment_time.npy", 'wb') as f:
+            np.save(f, np.array(self.solver_time))
 
     def OutputSolutionStep(self):
         self._GetSolver().OutputSolutionStep()

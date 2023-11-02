@@ -78,6 +78,7 @@ class KratosMappingDataTransferOperator(CoSimulationDataTransferOperator):
 
             if self.echo_level > 2:
                 cs_tools.cs_print_info(colors.bold(self._ClassName()), "Creating Mapper took: {0:.{1}f} [s]".format(time()-mapper_creation_start_time,2))
+            #print("\n here, TO  ", model_part_destination_name, " ", variable_destination, " ", to_solver_data.location, "\n" )
             self.__mappers[identifier_tuple].Map(variable_origin, variable_destination, mapper_flags)
 
     def _Check(self, from_solver_data, to_solver_data):

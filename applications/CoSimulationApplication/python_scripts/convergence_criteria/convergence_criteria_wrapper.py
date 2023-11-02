@@ -36,6 +36,7 @@ class ConvergenceCriteriaWrapper:
         if self.interface_data.IsDefinedOnThisRank():
             self.data_comm = self.interface_data.GetModelPart().GetCommunicator().GetDataCommunicator()
             self.executing_rank = (self.data_comm.Rank() == 0)
+        self.r_norms = []
 
     def Initialize(self):
         self.conv_crit.Initialize()
@@ -70,6 +71,10 @@ class ConvergenceCriteriaWrapper:
                 current_data = np.array(np.concatenate(self.data_comm.GathervDoubles(current_data, 0)))
 
         is_converged = 0
+        if self.interface_data.solver_name == "fluid":
+            self.r_norms.append(np.linalg.norm(residual))
+            with open("./coSimData/r.npy", 'wb') as f:
+                np.save(f, np.array(self.r_norms))
         if self.executing_rank:
             is_converged = self.conv_crit.IsConverged(residual, current_data)
 

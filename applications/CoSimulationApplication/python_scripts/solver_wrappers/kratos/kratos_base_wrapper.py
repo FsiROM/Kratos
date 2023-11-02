@@ -131,6 +131,9 @@ class KratosBaseWrapper(CoSimulationSolverWrapper):
         else:
             return self._CreateAnalysisStage()
 
+    def ReceiveRomComponents(self, inputReduc_model=None, regression_model=None, outputReduc_model=None):
+        pass
+    
     def PrintInfo(self):
         super().PrintInfo()
         cs_tools.cs_print_info("KratosSolver", self._ClassName())

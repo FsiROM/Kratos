@@ -62,11 +62,12 @@ class BaseCouplingInterfaceData:
     @staticmethod
     def GetDefaultParameters():
         return KM.Parameters("""{
-            "model_part_name" : "",
-            "variable_name"   : "",
-            "location"        : "node_historical",
-            "dimension"       : -1,
-            "additional_info" : { }
+            "model_part_name"       : "",
+            "model_part_name_local" : "",
+            "variable_name"         : "",
+            "location"              : "node_historical",
+            "dimension"             : -1,
+            "additional_info"       : { }
         }""")
 
     def IsDefinedOnThisRank(self):

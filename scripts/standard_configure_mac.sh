@@ -16,25 +16,31 @@ add_app () {
 }
 
 # Set compiler
-export CC=/usr/local/opt/llvm/bin/clang
-export CXX=/usr/local/opt/llvm/bin/clang++
+export CC=/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/cc
+export CXX=/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++
 
 # Set variables
 export KRATOS_SOURCE="${KRATOS_SOURCE:-"$( cd "$(dirname "$0")" ; pwd -P )"/..}"
 export KRATOS_BUILD="${KRATOS_SOURCE}/build"
 export KRATOS_APP_DIR="${KRATOS_SOURCE}/applications"
-export KRATOS_INSTALL_PYTHON_USING_LINKS=ON
+export KRATOS_INSTALL_PYTHON_USING_LINKS=OFF
 
 # Set basic configuration
 export KRATOS_BUILD_TYPE=${KRATOS_BUILD_TYPE:-"Release"}
 export BOOST_ROOT=${BOOST_ROOT:-"/path/to/boost"}
-export PYTHON_EXECUTABLE=${PYTHON_EXECUTABLE:-"/Library/Frameworks/Python.framework/Versions/3.7/bin/python3"}
+export PYTHON_EXECUTABLE=${PYTHON_EXECUTABLE:-"/opt/homebrew/bin/python3"}
 
 # Set applications to compile
 export KRATOS_APPLICATIONS=
 add_app ${KRATOS_APP_DIR}/LinearSolversApplication
-add_app ${KRATOS_APP_DIR}/StructuralMechanicsApplication
+add_app ${KRATOS_APP_DIR}/CoSimulationApplication
+add_app ${KRATOS_APP_DIR}/FSIApplication
 add_app ${KRATOS_APP_DIR}/FluidDynamicsApplication
+add_app ${KRATOS_APP_DIR}/SolidMechanicsApplication
+add_app ${KRATOS_APP_DIR}/StructuralMechanicsApplication
+add_app ${KRATOS_APP_DIR}/MeshMovingApplication
+add_app ${KRATOS_APP_DIR}/MappingApplication
+add_app ${KRATOS_APP_DIR}/ConstitutiveLawsApplication
 
 # Clean
 clear
@@ -44,8 +50,9 @@ rm -rf "${KRATOS_BUILD}/${KRATOS_BUILD_TYPE}/CMakeFiles"
 
 # Configure
 /Applications/CMake.app/Contents/bin/cmake -H"${KRATOS_SOURCE}" -B"${KRATOS_BUILD}/${KRATOS_BUILD_TYPE}"    \
- -DCMAKE_CXX_FLAGS="${CMAKE_CXX_FLAGS} -msse3 -std=c++11 -L/usr/local/opt/llvm/lib"                         \
- -DCMAKE_C_FLAGS="${CMAKE_C_FLAGS} -msse3 -L/usr/local/opt/llvm/lib"                                        \
+ -DKRATOS_SHARED_MEMORY_PARALLELIZATION="None" \
+ -DCMAKE_CXX_FLAGS="${CMAKE_CXX_FLAGS} "                         \
+ -DCMAKE_C_FLAGS="${CMAKE_C_FLAGS}"                                        \
  -DUSE_EIGEN_MKL=OFF                                                                                        \
  -DKRATOS_GENERATE_PYTHON_STUBS=ON
 

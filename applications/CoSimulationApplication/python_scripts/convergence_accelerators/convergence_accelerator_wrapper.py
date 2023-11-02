@@ -59,10 +59,13 @@ class ConvergenceAcceleratorWrapper:
 
         self.conv_acc.InitializeNonLinearIteration()
 
-    def FinalizeNonLinearIteration(self):
-        self.conv_acc.FinalizeNonLinearIteration()
+    def FinalizeNonLinearIteration(self, current_t = 0., currentCharDisp = 0.):
+        self.conv_acc.FinalizeNonLinearIteration(current_t, currentCharDisp)
 
-    def ComputeAndApplyUpdate(self):
+    def ReceiveJacobian(self, jacobian):
+        self.conv_acc.ReceiveJacobian(jacobian)
+
+    def ComputeAndApplyUpdate(self,):
         if not self.interface_data.IsDefinedOnThisRank(): return
 
         residual = self.residual_computation.ComputeResidual(self.input_data)

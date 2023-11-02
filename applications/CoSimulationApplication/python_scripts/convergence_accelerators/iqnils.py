@@ -51,7 +51,7 @@ class IQNILSConvergenceAccelerator(CoSimulationConvergenceAccelerator):
     # @param r residual r_k
     # @param x solution x_k
     # Computes the approximated update in each iteration.
-    def UpdateSolution( self, r, x ):
+    def UpdateSolution( self, r, x , t):
         self.R.appendleft( deepcopy(r) )
         self.X.appendleft(    x + r    )  # r = x~ - x
         row = len(r)
@@ -88,7 +88,7 @@ class IQNILSConvergenceAccelerator(CoSimulationConvergenceAccelerator):
 
                 ## Solve least-squares problem
                 delta_r = -self.R[0]
-                c = np.linalg.lstsq(V, delta_r)[0]
+                c = np.linalg.lstsq(V, delta_r, rcond=-1)[0]
 
                 ## Compute the update
                 delta_x = np.dot(W, c) - delta_r
@@ -103,8 +103,7 @@ class IQNILSConvergenceAccelerator(CoSimulationConvergenceAccelerator):
                 W = self.W_old
                 ## Solve least-squares problem
                 delta_r = -self.R[0]
-                c = np.linalg.lstsq(V, delta_r)[0]
-
+                c = np.linalg.lstsq(V, delta_r, rcond = -1)[0]
                 ## Compute the update
                 delta_x = np.dot(W, c) - delta_r
                 return delta_x
@@ -133,12 +132,14 @@ class IQNILSConvergenceAccelerator(CoSimulationConvergenceAccelerator):
 
                 ## Solve least-squares problem
                 delta_r = -self.R[0]
-                c = np.linalg.lstsq(V, delta_r)[0]
-
+                c = np.linalg.lstsq(V, delta_r, rcond=-1)[0]            
                 ## Compute the update
                 delta_x = np.dot(W, c) - delta_r
 
                 return delta_x
+
+    def FinalizeNonLinearIteration(self, current_t, currentCharDisp):
+        return super().FinalizeNonLinearIteration()
 
     ## FinalizeSolutionStep()
     # Finalizes the current time step and initializes the next time step.

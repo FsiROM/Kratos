@@ -379,6 +379,11 @@ class CoSimulationCoupledSolver(CoSimulationSolverWrapper):
 
         return solver_cosim_details
 
+    def ReceiveRomComponents(self, inputReduc_model=None, regression_model=None, outputReduc_model=None):
+        for solver in self.solver_wrappers.values():
+            solver.ReceiveRomComponents(inputReduc_model, regression_model, outputReduc_model)
+            
+
     @classmethod
     def _GetDefaultParameters(cls):
         this_defaults = KM.Parameters("""{

@@ -87,6 +87,9 @@ class MVQNConvergenceAccelerator(CoSimulationConvergenceAccelerator):
 
         return delta_x
 
+    def FinalizeNonLinearIteration(self, current_t = 0., currentCharDisp = 0.):
+        return super().FinalizeNonLinearIteration()
+
     ## FinalizeSolutionStep()
     # Finalizes the current time step and initializes the next time step.
     def FinalizeSolutionStep( self ):
