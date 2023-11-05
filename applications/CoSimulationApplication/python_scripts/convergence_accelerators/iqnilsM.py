@@ -142,17 +142,17 @@ class IQNILSMConvergenceAccelerator(CoSimulationConvergenceAccelerator):
         self.ort_w_arr.append(new_ort_w)
         self.angles.append(angles)
 
-        #with open("./coSimData/X_k.npy", 'wb') as f:
-        #    np.save(f, np.array(self.x_k).T)
-        #with open("./coSimData/Delt_X_par.npy", 'wb') as f:
+        with open("./coSimData/X_k.npy", 'wb') as f:
+           np.save(f, np.array(self.x_k).T)
+        # with open("./coSimData/Delt_X_par.npy", 'wb') as f:
         #    np.save(f, np.array(self.delta_x_par).T)
         with open("./coSimData/R_orth.npy", 'wb') as f:
             np.save(f, np.array(self.r_orth).T)
-        with open("./coSimData/subsp_dists.npy", 'wb') as f:
-            np.save(f, np.array(self.dists))
-        with open("./coSimData/subsp_dim.npy", 'wb') as f:
-            np.save(f, np.array(self.sizes))
-        #with open("./coSimData/old_delt_x.npy", 'wb') as f:
+        # with open("./coSimData/subsp_dists.npy", 'wb') as f:
+        #     np.save(f, np.array(self.dists))
+        # with open("./coSimData/subsp_dim.npy", 'wb') as f:
+        #     np.save(f, np.array(self.sizes))
+        # with open("./coSimData/old_delt_x.npy", 'wb') as f:
         #    np.save(f, np.array(self.old_delt_x).T)
         with open("./coSimData/ort_w.npy", 'wb') as f:
             np.save(f, np.array(self.ort_w_arr))
@@ -238,7 +238,7 @@ class IQNILSMConvergenceAccelerator(CoSimulationConvergenceAccelerator):
                     self._train_w()
                     paral_part = Q @ b
                     _, s, _ = np.linalg.svd(Q.T @ np.eye(row, V.shape[1]))
-                    angles = self._AnglesFromS(s, row)
+                    angles = self._AnglesFromS(np.arccos(s), row)
                     delt_r_orth = delta_r - paral_part
                     dist = np.linalg.norm(np.arccos(s))
                     dim = V.shape[1]
@@ -280,7 +280,7 @@ class IQNILSMConvergenceAccelerator(CoSimulationConvergenceAccelerator):
                 if self.is_in_prediction_region(current_t) or self.is_in_training_region(current_t):
                     paral_part = Q @ b
                     _, s, _ = np.linalg.svd(Q.T @ np.eye(row, V.shape[1]))
-                    angles = self._AnglesFromS(s, row)
+                    angles = self._AnglesFromS(np.arccos(s), row)
                     delt_r_orth = delta_r - paral_part
                     dist = np.linalg.norm(np.arccos(s))
                     dim = V.shape[1]
@@ -341,7 +341,7 @@ class IQNILSMConvergenceAccelerator(CoSimulationConvergenceAccelerator):
                 if self.is_in_prediction_region(current_t) or self.is_in_training_region(current_t):
                     paral_part = Q @ b
                     _, s, _ = np.linalg.svd(Q.T @ np.eye(row, V.shape[1]))
-                    angles = self._AnglesFromS(s, row)
+                    angles = self._AnglesFromS(np.arccos(s), row)
                     delt_r_orth = delta_r - paral_part
                     dist = np.linalg.norm(np.arccos(s))
                     dim = V.shape[1]

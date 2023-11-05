@@ -53,11 +53,11 @@ class GaussSeidelStrongCoupledSolver(CoSimulationCoupledSolver):
     def is_in_training_mode(self):
         t = self.process_info[KM.TIME]
         return (t >= self.launch_train) and (t <= self.end_train)
-    
+
     def is_in_prediction_mode(self):
         t = self.process_info[KM.TIME]
         return (t >= self.launch_predict) and (t <= self.end_predict)
-    
+
     def Initialize(self):
         super().Initialize()
 
@@ -101,7 +101,7 @@ class GaussSeidelStrongCoupledSolver(CoSimulationCoupledSolver):
                 self.sol_rom_initialG = pickle.load(inp)
         else:
             return self.sol_rom_initialG
-        
+
     def InitialGuess(self, previous_load, initial_disp):
 
         fl_rom_model = self._Get_fl_model()
@@ -110,7 +110,7 @@ class GaussSeidelStrongCoupledSolver(CoSimulationCoupledSolver):
         w = 0.08
         past_iter_load = previous_load.copy()
         updated_disp = sol_rom_initialG.pred(previous_load.reshape((-1, 1)))
-        inferred_load = fl_rom_model.predict(updated_disp, 
+        inferred_load = fl_rom_model.predict(updated_disp,
                                                     previous_load.reshape((-1, 1)))
         new_load = inferred_load.copy()
         r = new_load - previous_load.reshape((-1, 1))
@@ -131,7 +131,7 @@ class GaussSeidelStrongCoupledSolver(CoSimulationCoupledSolver):
                 new_load = past_iter_newload - inv_J @ r + r
 
             updated_disp = sol_rom_initialG.pred(new_load)
-            inferred_load = fl_rom_model.predict(updated_disp, 
+            inferred_load = fl_rom_model.predict(updated_disp,
                                                         previous_load.reshape((-1, 1)))
             r = inferred_load - new_load
             resid_norm = np.linalg.norm(r)/np.linalg.norm(new_load)
@@ -147,7 +147,7 @@ class GaussSeidelStrongCoupledSolver(CoSimulationCoupledSolver):
         self.solver_wrappers[self.accel_solver].GetInterfaceData(self.accel_data).SetData(previous_load + (inferred_load.ravel() - self.previous_surrogate_sol))
         self.previous_surrogate_sol = inferred_load.ravel()
         return inv_J
-    
+
     def InitializeSolutionStep(self):
         super().InitializeSolutionStep()
 
@@ -162,10 +162,10 @@ class GaussSeidelStrongCoupledSolver(CoSimulationCoupledSolver):
             # Initial Surrogate SOL
             if self.previous_surrogate_sol is None:
                 self.previous_surrogate_sol = self.solver_wrappers[self.accel_solver].GetInterfaceData(self.accel_data).GetData()
-            
+
             if self.is_in_IGuess_prediction_mode():
                 print("\n Performing an Initial Guess \n")
-                inv_J = self.InitialGuess(self.solver_wrappers[self.accel_solver].GetInterfaceData(self.accel_data).GetData(), 
+                inv_J = self.InitialGuess(self.solver_wrappers[self.accel_solver].GetInterfaceData(self.accel_data).GetData(),
                                 self.solver_wrappers["structure"].GetInterfaceData("disp").GetData())
                 if inv_J is not None:
                     for conv_acc in self.convergence_accelerators_list:
@@ -200,7 +200,7 @@ class GaussSeidelStrongCoupledSolver(CoSimulationCoupledSolver):
             for conv_crit in self.convergence_criteria_list:
                 conv_crit.InitializeNonLinearIteration()
 
-            self._SaveInputflLoad()
+            #self._SaveInputflLoad()
             for solver_name, solver in self.solver_wrappers.items():
                 self._SynchronizeInputData(solver_name)
                 t0 = time.time()
@@ -250,12 +250,12 @@ class GaussSeidelStrongCoupledSolver(CoSimulationCoupledSolver):
     def _SaveInputflLoad(self):
         self.input_fl_load.append(self.solver_wrappers[self.accel_solver].GetInterfaceData(self.accel_data).GetData())
         with open("./coSimData/InputFlLoad.npy", 'wb') as f:
-            np.save(f, np.array(self.input_fl_load).T) 
+            np.save(f, np.array(self.input_fl_load).T)
 
     def _SaveLastx(self, x_last):
         self.x_last.append(x_last)
         with open("./coSimData/finalX.npy", 'wb') as f:
-            np.save(f, np.array(self.x_last).T)        
+            np.save(f, np.array(self.x_last).T)
 
     def _SaveTimes(self, solver_name, t):
         self.solvers_times[solver_name].append(t)
@@ -266,7 +266,7 @@ class GaussSeidelStrongCoupledSolver(CoSimulationCoupledSolver):
         self.iterations_table.append(self.process_info[KratosCoSim.COUPLING_ITERATION_NUMBER])
         with open("./coSimData/iters.npy", 'wb') as f:
             np.save(f, np.array(self.iterations_table))
-    
+
     def Check(self):
         super().Check()
 
@@ -298,7 +298,7 @@ class GaussSeidelStrongCoupledSolver(CoSimulationCoupledSolver):
 
             input_data = np.array([])
             for (data_name, _)in self.rom_data["data"].items():
-                input_data = np.concatenate((input_data, self.secondary_interface[data_name].GetData()))           
+                input_data = np.concatenate((input_data, self.secondary_interface[data_name].GetData()))
             to_solver.receive_input_data(input_data)
 
 
