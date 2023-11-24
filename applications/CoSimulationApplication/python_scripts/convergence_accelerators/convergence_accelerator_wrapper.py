@@ -8,6 +8,7 @@ from ..coupling_interface_data import CouplingInterfaceData
 # Other imports
 import numpy as np
 from abc import ABCMeta, abstractmethod
+from collections import deque
 
 class ConvergenceAcceleratorWrapper:
     """This class wraps the convergence accelerators such that they can be used "automized"
@@ -74,6 +75,8 @@ class ConvergenceAcceleratorWrapper:
             for data_name in self.interface_data_dict:
                 self.prev_input_data[data_name] = self.interface_data_dict[data_name].GetData()
                 self.output_data[data_name] = self.interface_data_dict[data_name].GetData()
+        self.load_data = deque()
+        self.accelerated_load_data = deque()
 
     def Finalize(self):
         self.conv_acc.Finalize()
@@ -83,6 +86,7 @@ class ConvergenceAcceleratorWrapper:
 
     def FinalizeSolutionStep(self):
         self.conv_acc.FinalizeSolutionStep()
+        self.conv_acc.ReceivePreviousSol(self.interface_data.GetData())
 
     def InitializeNonLinearIteration(self):
         # Saving the previous data for the computation of the residual
@@ -101,10 +105,10 @@ class ConvergenceAcceleratorWrapper:
     def FinalizeNonLinearIteration(self, current_t = 0., currentCharDisp = 0.):
         self.conv_acc.FinalizeNonLinearIteration(current_t, currentCharDisp)
 
-    def ReceiveJacobian(self, jacobian):
-        self.conv_acc.ReceiveJacobian(jacobian)
-
     def _ComputeAndApplyUpdate(self,):
+        # self.load_data.append(self.interface_data.GetData().reshape((-1, 1)))
+        # np.save("./coSimData/outfluid_load_data.npy",
+        #         np.asarray(self.load_data)[:, :, 0].T)
         if not self.interface_data.IsDefinedOnThisRank(): return
 
         residual = self.residual_computation.ComputeResidual(self.input_data)
@@ -126,6 +130,9 @@ class ConvergenceAcceleratorWrapper:
             updated_data = self.data_comm.ScattervDoubles(data_to_scatter, 0)
 
         self.interface_data.SetData(updated_data)
+        self.accelerated_load_data.append(self.interface_data.GetData().reshape((-1, 1)))
+        np.save("./coSimData/Acceleratedload_data.npy",
+                np.asarray(self.accelerated_load_data)[:, :, 0].T)
 
     def _ComputeAndApplyBlockUpdate(self, solver_name = None):
         # Defaulting to the first solver in the sequence
@@ -186,6 +193,12 @@ class ConvergenceAcceleratorWrapper:
 
     def Check(self):
         self.conv_acc.Check()
+
+    def ReceivePredictedSol(self, ):
+        self.conv_acc.ReceivePredictedSol(2*self.interface_data.GetData(0) - self.interface_data.GetData(1))
+
+    def ReceiveJacobian(self, J, Q, R, deltaX):
+        self.conv_acc.ReceiveJacobian(J, Q, R, deltaX)
 
 class ConvergenceAcceleratorResidual(metaclass=ABCMeta):
     @abstractmethod

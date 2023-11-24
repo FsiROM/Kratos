@@ -14,6 +14,7 @@ import numpy as np
 import os
 import time
 import pickle
+from collections import deque
 
 def Create(settings, models, solver_name):
     return GaussSeidelStrongCoupledSolver(settings, models, solver_name)
@@ -21,6 +22,7 @@ def Create(settings, models, solver_name):
 class GaussSeidelStrongCoupledSolver(CoSimulationCoupledSolver):
     def __init__(self, settings, models, solver_name):
         super().__init__(settings, models, solver_name)
+        self.load_data = deque()
 
         self.num_coupling_iterations = self.settings["num_coupling_iterations"].GetInt()
         self.secondary_interface = None
@@ -38,8 +40,8 @@ class GaussSeidelStrongCoupledSolver(CoSimulationCoupledSolver):
 
         # =========== Initial Guess/Surrogate Settings ===========
         self.previous_surrogate_sol = None
-        self.accel_solver =  self.settings["convergence_accelerators"][0]["solver"].GetString()
-        self.accel_data =  self.settings["convergence_accelerators"][0]["data_name"].GetString()
+        # self.accel_solver =  self.settings["convergence_accelerators"][0]["solver"].GetString()
+        # self.accel_data =  self.settings["convergence_accelerators"][0]["data_name"].GetString()
         self.do_initial_guess = self.settings["initial_guess"].GetBool()
         self.initial_guess_Tstart = self.settings["initial_guess_launch_time"].GetDouble()
         self.fl_rom_model = None
@@ -227,8 +229,8 @@ class GaussSeidelStrongCoupledSolver(CoSimulationCoupledSolver):
                     cs_tools.cs_print_info(self._ClassName(), colors.green("### CONVERGENCE WAS ACHIEVED ###"))
                 self.__CommunicateIfTimeStepNeedsToBeRepeated(False)
                 self._SaveNumIteration()
-                if self.save_tr_data and self.is_in_training_mode():
-                    self._SaveLastx(self.solver_wrappers[self.accel_solver].GetInterfaceData(self.accel_data).GetData())
+                # if self.save_tr_data and self.is_in_training_mode():
+                #     self._SaveLastx(self.solver_wrappers[self.accel_solver].GetInterfaceData(self.accel_data).GetData())
                 return True
 
             if k+1 >= self.num_coupling_iterations:
@@ -236,8 +238,8 @@ class GaussSeidelStrongCoupledSolver(CoSimulationCoupledSolver):
                     cs_tools.cs_print_info(self._ClassName(), colors.red("XXX CONVERGENCE WAS NOT ACHIEVED XXX"))
                 self.__CommunicateIfTimeStepNeedsToBeRepeated(False)
                 self._SaveNumIteration()
-                if self.save_tr_data and self.is_in_training_mode():
-                    self._SaveLastx(self.solver_wrappers[self.accel_solver].GetInterfaceData(self.accel_data).GetData())
+                # if self.save_tr_data and self.is_in_training_mode():
+                #     self._SaveLastx(self.solver_wrappers[self.accel_solver].GetInterfaceData(self.accel_data).GetData())
                 return False
 
             # if it reaches here it means that the coupling has not converged and this was not the last coupling iteration
@@ -281,8 +283,25 @@ class GaussSeidelStrongCoupledSolver(CoSimulationCoupledSolver):
         for conv_crit in self.convergence_accelerators_list:
             conv_crit.Check()
 
+    def _SynchronizeOutputData(self, solver_name):
+        super()._SynchronizeOutputData(solver_name)
+        if solver_name == "fluid":
+            self.load_data.append(self.solver_wrappers["fluid"].GetInterfaceData("load").GetData().reshape((-1, 1)))
+            np.save("./coSimData/outfluid_load_data.npy",
+                    np.asarray(self.load_data)[:, :, 0].T)
+
+            for predictor in self.predictors_list:
+                predictor.ReceiveNewData(self.solver_wrappers["structure"].GetInterfaceData("disp").GetData().reshape((-1, 1)),
+                                         self.solver_wrappers["fluid"].GetInterfaceData("load").GetData().reshape((-1, 1)))
+
+
     def _SynchronizeInputData(self, solver_name):
         super()._SynchronizeInputData(solver_name)
+
+        if solver_name == "structure":
+            to_solver = self.solver_wrappers[solver_name]
+            to_solver.receive_input_data(self.solver_wrappers["fluid"].GetInterfaceData(
+                "load").GetData().reshape((-1, 1)))
 
         self.rom_data = self.settings["rom_comm_data"]
         if self.rom_data.Has("coords_data") and (self.is_in_training_mode() or self.is_in_prediction_mode()):

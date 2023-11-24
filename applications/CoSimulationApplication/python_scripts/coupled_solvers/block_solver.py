@@ -53,12 +53,14 @@ class BlockSolver(GaussSeidelStrongCoupledSolver):
                 if self.echo_level > 0:
                     cs_tools.cs_print_info(self._ClassName(), colors.green("### CONVERGENCE WAS ACHIEVED ###"))
                 self.__CommunicateIfTimeStepNeedsToBeRepeated(False)
+                self._SaveNumIteration()
                 return True
 
             if k+1 >= self.num_coupling_iterations:
                 if self.echo_level > 0:
                     cs_tools.cs_print_info(self._ClassName(), colors.red("XXX CONVERGENCE WAS NOT ACHIEVED XXX"))
                 self.__CommunicateIfTimeStepNeedsToBeRepeated(False)
+                self._SaveNumIteration()
                 return False
 
             # if it reaches here it means that the coupling has not converged and this was not the last coupling iteration

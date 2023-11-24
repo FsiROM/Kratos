@@ -99,7 +99,7 @@ class StructuralROMWrapper(structural_mechanics_wrapper.StructuralMechanicsWrapp
             else:
                 #coords = np.asarray(self.GetInterfaceData(self.output_data_name).model_part.GetNodes())[:, :2]
                 self.rom_model.train(np.asarray(self.load_data)[:, :, 0].T, np.asarray(self.displacement_data)[:, :, 0].T,
-                                     rank_pres=20, rank_disp=.9999,
+                                     rank_pres=50, rank_disp=.9999,
                                      map_used = self.map_used,
                                      norm_regr=[self.force_norm_regr, self.disp_norm_regr],
                                      norm=[self.force_norm, self.disp_norm],
@@ -224,7 +224,7 @@ class StructuralROMWrapper(structural_mechanics_wrapper.StructuralMechanicsWrapp
     def ToComputeResiduals(self, ):
         #TODO What condition to use in order to compute the residuals ?
         # ======= Condition to be met for computing the residuals ============
-        return True
+        return False
 
     def _ComputeResiduals(self,):
 

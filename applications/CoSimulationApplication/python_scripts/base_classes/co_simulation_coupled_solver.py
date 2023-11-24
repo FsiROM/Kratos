@@ -172,10 +172,15 @@ class CoSimulationCoupledSolver(CoSimulationSolverWrapper):
 
     def Predict(self):
         for predictor in self.predictors_list:
+            predictor.ReceiveTime(self.process_info[KM.TIME])
             predictor.Predict()
 
         for solver in self.solver_wrappers.values():
             solver.Predict()
+
+        for predictor in self.predictors_list:
+            for convAcc in self.convergence_accelerators_list:
+                convAcc.ReceiveJacobian(predictor.surrJac, predictor.surrQ, predictor.surrR, predictor.deltaX)
 
     def InitializeSolutionStep(self):
         for solver in self.solver_wrappers.values():
@@ -382,7 +387,7 @@ class CoSimulationCoupledSolver(CoSimulationSolverWrapper):
     def ReceiveRomComponents(self, inputReduc_model=None, regression_model=None, outputReduc_model=None):
         for solver in self.solver_wrappers.values():
             solver.ReceiveRomComponents(inputReduc_model, regression_model, outputReduc_model)
-            
+
 
     @classmethod
     def _GetDefaultParameters(cls):

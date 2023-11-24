@@ -34,6 +34,9 @@ class IBQNLSConvergenceAccelerator(CoSimulationConvergenceAccelerator):
         horizon = self.settings["iteration_horizon"].GetInt()
         timestep_horizon = self.settings["timestep_horizon"].GetInt()
         self.alpha = self.settings["alpha"].GetDouble()
+        self.alpha2 = self.settings["alpha2"].GetDouble()
+        self.alpha3 = self.settings["alpha3"].GetDouble()
+        self.epsilon = self.settings["epsilon"].GetDouble()
         self.gmres_rel_tol = self.settings["gmres_rel_tol"].GetDouble()
         self.gmres_abs_tol = self.settings["gmres_abs_tol"].GetDouble()
         self.q = timestep_horizon - 1
@@ -112,23 +115,31 @@ class IBQNLSConvergenceAccelerator(CoSimulationConvergenceAccelerator):
             V = self._augmentedMatrix(self.V_new[data_name], self.V_old[data_name], isFirstDt)
 
         Q, R = np.linalg.qr(W)
-        ##TODO QR Filtering
+        Q, R, V, W = self.qr_filter(Q, R, V, W)
         b = r - self.pinvProduct(V, Q, R, yResidual)
+        b += self.alpha3 * Q @ Q.T @ yResidual
 
         if self.previousQ is not None:
             ## Retrieving previous data for the coupled data jacobian approximation ----------------------------------------
             previousQ = self.previousQ
             previousR = self.previousR
-            if self.previousV is not None:
-                previousV = self.previousV
-            else:
-                if isFirstDt:
-                    previousV = self.V_new[coupled_data_name].copy()
-                else:
-                    previousV = np.hstack((self.V_new[coupled_data_name].copy(), self.V_old[coupled_data_name].copy()))
+            # if self.previousV is not None:
+            #     previousV = self.previousV
+            # else:
+            #     if isFirstDt:
+            #         previousV = self.V_new[coupled_data_name].copy()
+            #     else:
+            #         previousV = np.hstack((self.V_new[coupled_data_name].copy(), self.V_old[coupled_data_name].copy()))
+            previousV = self.previousV
 
             ## Matrix-free implementation of the linear solver (and the pseudoinverse) -------------------------------------
-            block_oper = lambda vec: vec - self.pinvProduct(V, Q, R, self.pinvProduct(previousV, previousQ, previousR, vec))
+            def productFunc(vec):
+                orthVec = vec - previousQ @ previousQ.T @ vec
+                prod1 = self.pinvProduct(previousV, previousQ, previousR, vec) - self.alpha2 * orthVec
+                orthVec2 = prod1 - Q @ Q.T @ prod1
+                prod2 = self.pinvProduct(V, Q, R, prod1) - self.alpha3 * orthVec2
+                return vec - prod2
+            block_oper = lambda vec: productFunc(vec)
             block_x = sp.sparse.linalg.LinearOperator((row, row), block_oper)
             delta_x, _ = sp.sparse.linalg.gmres( block_x, b, atol=self.gmres_abs_tol, tol=self.gmres_rel_tol )
         else:
@@ -138,12 +149,33 @@ class IBQNLSConvergenceAccelerator(CoSimulationConvergenceAccelerator):
         ## Saving data for the approximate jacobian for the next iteration
         self.previousQ = Q.copy()
         self.previousR = R.copy()
-        if isFirstiter: # V only needs to be saved completely on the first iteration
-            self.previousV = V.copy()
-        else: # Otherwise it can be retrieved from V_new and V_old and memory is freed
-            self.previousV = None
+        # if isFirstiter: # V only needs to be saved completely on the first iteration
+        #     self.previousV = V.copy()
+        # else: # Otherwise it can be retrieved from V_new and V_old and memory is freed
+        #     self.previousV = None
+        self.previousV = V.copy()
 
         return delta_x
+
+    def qr_filter(self, Q, R, V, W):
+
+        epsilon = self.settings["epsilon"].GetDouble()
+        cols = V.shape[1]
+        i = 0
+        while i < cols:
+            if np.abs(np.diag(R)[i]) < epsilon:
+                if self.echo_level > 2:
+                    cs_tools.cs_print_info(self._ClassName(),
+                                  "QR Filtering")
+                ids_tokeep = np.delete(np.arange(0, cols), i)
+                V = V[:, ids_tokeep]
+                cols = V.shape[1]
+                W = W[:, ids_tokeep]
+                Q, R = np.linalg.qr(V)
+            else:
+                i += 1
+
+        return Q, R, V, W
 
     def _augmentedMatrix(self, mat, oldMat, isFirstDt):
         if isFirstDt:
@@ -159,12 +191,14 @@ class IBQNLSConvergenceAccelerator(CoSimulationConvergenceAccelerator):
 
         for data_name in self.W_new:
 
-            if data_name == list(self.W_new.keys())[-1]: ## Check if last solver in the sequence
-                # Saving the V matrix for the next (first) iteration to recover the approximate jacobian
-                if self.V_old[data_name] != []:
-                    self.previousV = np.hstack((self.V_new[data_name].copy(), self.V_old[data_name].copy()))
-                else:
-                    self.previousV = self.V_new[data_name].copy()
+            # if data_name == list(self.W_new.keys())[-1]: ## Check if last solver in the sequence
+            #     # Saving the V matrix for the next (first) iteration to recover the approximate jacobian
+            #     if len(self.V_old[data_name]) > 0 and len(self.V_new[data_name]) > 0:
+            #         self.previousV = np.hstack((self.V_new[data_name].copy(), self.V_old[data_name].copy()))
+            #     elif len(self.V_new[data_name]) == 0:
+            #         self.previousV = self.V_old[data_name].copy()
+            #     else:
+            #         self.previousV = self.V_new[data_name].copy()
 
             if self.V_new[data_name] != [] and self.W_new[data_name] != []:
                 self.v_old_matrices[data_name].appendleft( self.V_new[data_name] )
@@ -182,14 +216,20 @@ class IBQNLSConvergenceAccelerator(CoSimulationConvergenceAccelerator):
             self.W_new[data_name] = []
             self.V_new[data_name] = []
 
+    def FinalizeNonLinearIteration(self, current_t = 0., currentCharDisp = 0.):
+        return super().FinalizeNonLinearIteration()
+
     @classmethod
     def _GetDefaultParameters(cls):
         this_defaults = KM.Parameters("""{
             "iteration_horizon" : 15,
             "timestep_horizon"  : 3,
             "alpha"   : 1.0,
+            "alpha2"   : 0.0,
+            "alpha3"   : 0.0,
             "gmres_rel_tol" : 1e-5,
             "gmres_abs_tol" : 1e-14,
+            "epsilon"  : 3e-4,
             "solver_sequence" : []
         }""")
         this_defaults.AddMissingParameters(super()._GetDefaultParameters())

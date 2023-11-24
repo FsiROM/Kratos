@@ -159,6 +159,15 @@ class IQNILSConvergenceAccelerator(CoSimulationConvergenceAccelerator):
         self.V_new = []
         self.W_new = []
 
+    def ReceiveJacobian(self, J, Q):
+        pass
+
+    def ReceivePredictedSol(self, newX):
+        pass
+
+    def ReceivePreviousSol(self, newX):
+        pass
+
     @classmethod
     def _GetDefaultParameters(cls):
         this_defaults = KM.Parameters("""{

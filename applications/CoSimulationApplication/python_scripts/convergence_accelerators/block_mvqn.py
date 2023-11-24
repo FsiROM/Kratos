@@ -116,6 +116,9 @@ class BLOCKMVQNConvergenceAccelerator(CoSimulationConvergenceAccelerator):
         if self.echo_level > 3:
             cs_tools.cs_print_info(self._ClassName(), "Jacobian matrix updated!")
 
+    def FinalizeNonLinearIteration(self, current_t = 0., currentCharDisp = 0.):
+        return super().FinalizeNonLinearIteration()
+
     @classmethod
     def _GetDefaultParameters(cls):
         this_defaults = KM.Parameters("""{
