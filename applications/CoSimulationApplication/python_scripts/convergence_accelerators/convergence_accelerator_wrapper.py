@@ -86,7 +86,7 @@ class ConvergenceAcceleratorWrapper:
 
     def FinalizeSolutionStep(self):
         self.conv_acc.FinalizeSolutionStep()
-        self.conv_acc.ReceivePreviousSol(self.interface_data.GetData())
+        # self.conv_acc.ReceivePreviousSol(self.interface_data.GetData())
 
     def InitializeNonLinearIteration(self):
         # Saving the previous data for the computation of the residual
@@ -131,8 +131,8 @@ class ConvergenceAcceleratorWrapper:
 
         self.interface_data.SetData(updated_data)
         self.accelerated_load_data.append(self.interface_data.GetData().reshape((-1, 1)))
-        np.save("./coSimData/Acceleratedload_data.npy",
-                np.asarray(self.accelerated_load_data)[:, :, 0].T)
+        # np.save("./coSimData/Acceleratedload_data.npy",
+        #         np.asarray(self.accelerated_load_data)[:, :, 0].T)
 
     def _ComputeAndApplyBlockUpdate(self, solver_name = None):
         # Defaulting to the first solver in the sequence

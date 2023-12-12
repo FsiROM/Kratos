@@ -386,6 +386,12 @@ class IQNILSMConvergenceAccelerator(CoSimulationConvergenceAccelerator):
 
         return r
 
+    def ReceivePredictedSol(self, newX):
+        pass
+
+    def ReceivePreviousSol(self, newX):
+        pass
+
     def _GetOrth_w(self, load, currentCharDisp, dist, dim):
 
         to_predict_w = self.settings["orthogonal_w"].Has("type")

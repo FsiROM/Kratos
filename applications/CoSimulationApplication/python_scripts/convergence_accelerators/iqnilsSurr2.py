@@ -187,18 +187,19 @@ class IQNILSSURR2ConvergenceAccelerator(CoSimulationConvergenceAccelerator):
                 delt_r_orth = delta_r - paral_part
 
                 if self.is_in_prediction_region(current_t):
-                    if self.surr_J is not None:
-                        maxnColumns = min(
-                            max(1, Q.shape[1]-2), self.surr_Q.shape[1])
-                        print(Q.shape, "and", maxnColumns)
+                    # if self.surr_J is not None:
+                    #     maxnColumns = min(
+                    #         max(1, Q.shape[1]-2), self.surr_Q.shape[1])
+                    #     print(Q.shape, "and", maxnColumns)
 
-                        surrogQ = self.surr_Q
-                        surrogR = self.surr_R
+                    #     surrogQ = self.surr_Q
+                    #     surrogR = self.surr_R
 
-                        b2 = surrogQ.T @ delt_r_orth
-                        c2 = sp.linalg.solve_triangular(surrogR, b2)
-                        delta_x = np.dot((W), c) + np.dot((self.surrDeltaX), c2) - (
-                            delt_r_orth - surrogQ @ surrogQ.T @ delt_r_orth)
+                    #     b2 = surrogQ.T @ delt_r_orth
+                    #     c2 = sp.linalg.solve_triangular(surrogR, b2)
+                    #     delta_x = np.dot((W), c) + np.dot((self.surrDeltaX), c2) - (
+                    #         delt_r_orth - surrogQ @ surrogQ.T @ delt_r_orth)
+                    delta_x = np.dot((W), c) - delt_r_orth
                 else:
                     delta_x = np.dot((W), c) - delt_r_orth
 
@@ -238,8 +239,10 @@ class IQNILSSURR2ConvergenceAccelerator(CoSimulationConvergenceAccelerator):
 
                         b2 = surrogQ.T @ delt_r_orth
                         c2 = sp.linalg.solve_triangular(surrogR, b2)
-                        delta_x = np.dot((W), c) + np.dot((self.surrDeltaX), c2) - (
+                        delta_x = np.dot((W), c) + np.dot((self.surrDeltaX), c2) - 0.8 * (
                             delt_r_orth - surrogQ @ surrogQ.T @ delt_r_orth)
+                    else:
+                        delta_x = np.dot((W), c) - delt_r_orth
                 else:
                     delta_x = np.dot((W), c) - delt_r_orth
 
@@ -286,18 +289,19 @@ class IQNILSSURR2ConvergenceAccelerator(CoSimulationConvergenceAccelerator):
                 delt_r_orth = delta_r - paral_part
 
                 if self.is_in_prediction_region(current_t):
-                    if self.surr_J is not None:
-                        maxnColumns = min(
-                            max(1, Q.shape[1]-2), self.surr_Q.shape[1])
-                        print(Q.shape, "and", maxnColumns)
+                    # if self.surr_J is not None:
+                    #     maxnColumns = min(
+                    #         max(1, Q.shape[1]-2), self.surr_Q.shape[1])
+                    #     print(Q.shape, "and", maxnColumns)
 
-                        surrogQ = self.surr_Q
-                        surrogR = self.surr_R
+                    #     surrogQ = self.surr_Q
+                    #     surrogR = self.surr_R
 
-                        b2 = surrogQ.T @ delt_r_orth
-                        c2 = sp.linalg.solve_triangular(surrogR, b2)
-                        delta_x = np.dot((W), c) + np.dot((self.surrDeltaX), c2) - (
-                            delt_r_orth - surrogQ @ surrogQ.T @ delt_r_orth)
+                    #     b2 = surrogQ.T @ delt_r_orth
+                    #     c2 = sp.linalg.solve_triangular(surrogR, b2)
+                    #     delta_x = np.dot((W), c) + np.dot((self.surrDeltaX), c2) - (
+                    #         delt_r_orth - surrogQ @ surrogQ.T @ delt_r_orth)
+                    delta_x = np.dot((W), c) - delt_r_orth
                 else:
                     delta_x = np.dot((W), c) - delt_r_orth
 

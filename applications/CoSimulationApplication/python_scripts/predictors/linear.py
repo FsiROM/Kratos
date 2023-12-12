@@ -14,8 +14,6 @@ class LinearPredictor(CoSimulationPredictor):
     def __init__(self, settings, solver_wrapper):
         super().__init__(settings, solver_wrapper)
 
-        self.savedModes = np.load(
-            "./coSimData/PodFilteringData/savedModes.npy")
         self.launch_time = self.settings["prediction_launch_time"].GetDouble()
         self.previousX = None
         self.surrJac = None

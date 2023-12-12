@@ -27,7 +27,7 @@ class FluidDynamicsWrapper(kratos_base_wrapper.KratosBaseWrapper):
         self.section_part_created = False
 
     def extract_nodes(self, coords_data, model_part_name, tol = 5e-3):
-        
+
         if not self.section_part_created:
             section_model_part = self._analysis_stage._GetSolver().GetComputingModelPart().CreateSubModelPart(model_part_name)
             if coords_data.Has("x"):
@@ -40,17 +40,17 @@ class FluidDynamicsWrapper(kratos_base_wrapper.KratosBaseWrapper):
                     for node in self._analysis_stage._GetSolver().GetComputingModelPart().GetNodes():
                         if np.abs(node.Y - y_coor.GetDouble()) < tol:
                             section_model_part.AddNode(node, 0)
-            
+
             self.section_part_created = True
 
     def GetSectionData(self, section_variables):
         data_arr = np.array([])
         section_model_part = self._analysis_stage._GetSolver().GetComputingModelPart().GetSubModelPart("section_part")
         for var in section_variables:
-            data_arr = np.concatenate((data_arr, KM.VariableUtils().GetSolutionStepValuesVector(section_model_part.GetNodes(), 
+            data_arr = np.concatenate((data_arr, KM.VariableUtils().GetSolutionStepValuesVector(section_model_part.GetNodes(),
                                                               var, 0, 2)))
         return data_arr
-    
+
     def initialize_data(self, ):
         self.load_data = deque()
 
@@ -58,13 +58,13 @@ class FluidDynamicsWrapper(kratos_base_wrapper.KratosBaseWrapper):
         self.load_data.append(current_load)
         np.save("./coSimData/load_data_fluid.npy",
                 np.asarray(self.load_data)[:, :, 0].T)
-        
+
     def SolveSolutionStep(self):
         super().SolveSolutionStep()
 
-        current_load = self.GetInterfaceData(
-            "load").GetData().reshape((-1, 1))
-        self.update_load_data(current_load)
+        #current_load = self.GetInterfaceData(
+        #    "load").GetData().reshape((-1, 1))
+        #self.update_load_data(current_load)
 
     def _CreateAnalysisStage(self):
         return FluidDynamicsAnalysis(self.model, self.project_parameters)

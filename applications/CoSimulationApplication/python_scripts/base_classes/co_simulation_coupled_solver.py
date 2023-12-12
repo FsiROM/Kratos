@@ -178,9 +178,9 @@ class CoSimulationCoupledSolver(CoSimulationSolverWrapper):
         for solver in self.solver_wrappers.values():
             solver.Predict()
 
-        for predictor in self.predictors_list:
-            for convAcc in self.convergence_accelerators_list:
-                convAcc.ReceiveJacobian(predictor.surrJac, predictor.surrQ, predictor.surrR, predictor.deltaX)
+        # for predictor in self.predictors_list:
+        #     for convAcc in self.convergence_accelerators_list:
+        #         convAcc.ReceiveJacobian(predictor.surrJac, predictor.surrQ, predictor.surrR, predictor.deltaX)
 
     def InitializeSolutionStep(self):
         for solver in self.solver_wrappers.values():

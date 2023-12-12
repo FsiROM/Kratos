@@ -22,6 +22,10 @@ class ConvergenceCriteriaWrapper:
                  parent_coupled_solver_data_communicator: KratosMultiphysics.DataCommunicator):
         self.interface_data = interface_data
 
+
+        # self.savedModes = np.load(
+        #     "./coSimData/PodFilteringData/savedModes.npy")
+
         for key in ("data_name", "solver"):
             if settings.Has(key):
                 settings.RemoveValue(key)
@@ -72,13 +76,13 @@ class ConvergenceCriteriaWrapper:
                 current_data = np.array(np.concatenate(self.data_comm.GathervDoubles(current_data, 0)))
 
         is_converged = 0
-        if self.interface_data.solver_name == "fluid":
-            self.r_norms.append(np.linalg.norm(residual))
-            with open("./coSimData/rNorm.npy", 'wb') as f:
-                np.save(f, np.array(self.r_norms))
-            self.r_.append((residual))
-            with open("./coSimData/r.npy", 'wb') as f:
-                np.save(f, np.array(self.r_).T)
+        # if self.interface_data.solver_name == "fluid":
+        #     self.r_norms.append(np.linalg.norm(residual))
+        #     with open("./coSimData/rNorm.npy", 'wb') as f:
+        #         np.save(f, np.array(self.r_norms))
+        #     self.r_.append((residual))
+        #     with open("./coSimData/r.npy", 'wb') as f:
+        #         np.save(f, np.array(self.r_).T)
         if self.executing_rank:
             is_converged = self.conv_crit.IsConverged(residual, current_data)
 
