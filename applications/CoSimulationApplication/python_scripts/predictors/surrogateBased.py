@@ -25,8 +25,8 @@ class SurrogatePredictor(CoSimulationPredictor):
         self.w0 = self.settings["w0"].GetDouble()
         fluidSurrofFileName = self.settings["file_nameFluid"].GetString()
         solidROMFileName = self.settings["file_nameSolid"].GetString()
-        # self.map = np.load("./coSimData/MeshData/map_used.npy")
-        self.fluidSurrogate = FluidSurrogBrute()
+        self.map = np.load("./coSimData/MeshData/map_used.npy")
+        self.fluidSurrogate = FluidSurrog()
         with open(fluidSurrofFileName, 'rb') as inp:
             self.fluidSurrogate = pickle.load(inp)
         self.solidSurrogate = solid_ROM()
@@ -64,8 +64,8 @@ class SurrogatePredictor(CoSimulationPredictor):
                 i = 0
                 while i<self.maxIter and not isConverged:
                     print("iteration ", i)
-                    # solidSol = self.map @ self.solidSurrogate.pred(pred_.reshape((-1, 1)))
-                    solidSol = self.solidSurrogate.pred(pred_.reshape((-1, 1)))
+                    solidSol = self.map @ self.solidSurrogate.pred(pred_.reshape((-1, 1)))
+                    #solidSol = self.solidSurrogate.pred(pred_.reshape((-1, 1)))
                     fluidSol = self.fluidSurrogate.predict(solidSol, self.previousX[:, np.newaxis]).ravel()
                     newResiduals = fluidSol - pred_
                     nrm = np.linalg.norm(newResiduals)

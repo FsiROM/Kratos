@@ -291,7 +291,7 @@ class GaussSeidelStrongCoupledSolver(CoSimulationCoupledSolver):
                                          self.solver_wrappers["blood"].GetInterfaceData("pressure").GetData().reshape((-1, 1)))
 
         if solver_name == "fluid":
-            self.load_data.append(self.solver_wrappers["fluid"].GetInterfaceData("load").GetData().reshape((-1, 1)))
+            #self.load_data.append(self.solver_wrappers["fluid"].GetInterfaceData("load").GetData().reshape((-1, 1)))
             #np.save("./coSimData/outfluid_load_data.npy",
             #        np.asarray(self.load_data)[:, :, 0].T)
 
@@ -303,10 +303,10 @@ class GaussSeidelStrongCoupledSolver(CoSimulationCoupledSolver):
     def _SynchronizeInputData(self, solver_name):
         super()._SynchronizeInputData(solver_name)
 
-        # if solver_name == "structure":
-        #     to_solver = self.solver_wrappers[solver_name]
-        #     to_solver.receive_input_data(self.solver_wrappers["fluid"].GetInterfaceData(
-        #         "load").GetData().reshape((-1, 1)))
+        if solver_name == "structure":
+             to_solver = self.solver_wrappers[solver_name]
+             to_solver.receive_input_data(self.solver_wrappers["fluid"].GetInterfaceData(
+                 "load").GetData().reshape((-1, 1)))
 
         self.rom_data = self.settings["rom_comm_data"]
         if self.rom_data.Has("coords_data") and (self.is_in_training_mode() or self.is_in_prediction_mode()):

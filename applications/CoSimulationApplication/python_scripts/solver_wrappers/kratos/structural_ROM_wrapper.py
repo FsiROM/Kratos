@@ -39,9 +39,6 @@ class StructuralROMWrapper(structural_mechanics_wrapper.StructuralMechanicsWrapp
 
         if self.is_in_collect_data_mode():
             self.update_load_data(self.current_load)
-        if self.save_tr_data:
-            np.save("./coSimData/load_data.npy",
-                    np.asarray(self.load_data)[:, :, 0].T)
 
     def get_rom_settings(self, ):
         self.launch_time = self.settings["launch_time"].GetDouble()
