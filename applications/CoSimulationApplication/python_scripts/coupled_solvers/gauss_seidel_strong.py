@@ -291,7 +291,7 @@ class GaussSeidelStrongCoupledSolver(CoSimulationCoupledSolver):
                                          self.solver_wrappers["blood"].GetInterfaceData("pressure").GetData().reshape((-1, 1)))
 
         if solver_name == "fluid":
-            #self.load_data.append(self.solver_wrappers["fluid"].GetInterfaceData("load").GetData().reshape((-1, 1)))
+            self.load_data.append(self.solver_wrappers["fluid"].GetInterfaceData("load").GetData().reshape((-1, 1)))
             #np.save("./coSimData/outfluid_load_data.npy",
             #        np.asarray(self.load_data)[:, :, 0].T)
 

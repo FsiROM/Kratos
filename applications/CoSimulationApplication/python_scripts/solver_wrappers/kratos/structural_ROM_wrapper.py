@@ -43,6 +43,7 @@ class StructuralROMWrapper(structural_mechanics_wrapper.StructuralMechanicsWrapp
     def get_rom_settings(self, ):
         self.launch_time = self.settings["launch_time"].GetDouble()
         self.start_collecting_time = self.settings["start_collecting_time"].GetDouble()
+        self.stop_collecting_time = self.settings["stop_collecting_time"].GetDouble()
         self.imported_model = self.settings["imported_model"].GetBool()
         self.save_model = self.settings["save_model"].GetBool()
         self.input_data_name = self.settings["input_data"]["data"].GetString()
@@ -54,6 +55,7 @@ class StructuralROMWrapper(structural_mechanics_wrapper.StructuralMechanicsWrapp
         self.disp_norm_regr = self.settings["disp_norm_regr"].GetBool()
         self.force_norm = self.settings["force_norm"].GetString()
         self.disp_norm = self.settings["disp_norm"].GetString()
+        self.include_volumetric_strain = self.settings["volumetric_strain_dofs"].GetBool()
         self.inputReduc_model = None
         self.regression_model = None
         self.outputReduc_model = None
@@ -62,6 +64,7 @@ class StructuralROMWrapper(structural_mechanics_wrapper.StructuralMechanicsWrapp
         self.load_data = deque()
         self.displacement_data = deque()
         self.displacement_data2 = deque()
+        self.volum_strain_data = deque()
         self.recons_time = []
         self.RomResiduals = []
         self.EncReconsErr = []
@@ -78,7 +81,7 @@ class StructuralROMWrapper(structural_mechanics_wrapper.StructuralMechanicsWrapp
 
     def data_collect_mode_strategy(self, ):
         # ======= Condition to be met for collecting training data ============
-        return self._analysis_stage.time < self.launch_time
+        return self._analysis_stage.time < self.launch_time and self._analysis_stage.time < self.stop_collecting_time
 
     def train_rom(self):
 
@@ -133,15 +136,20 @@ class StructuralROMWrapper(structural_mechanics_wrapper.StructuralMechanicsWrapp
             np.save("./coSimData/load_data.npy",
                     np.asarray(self.load_data)[:, :, 0].T)
 
-    def update_disp_data(self, current_disp):
+    def update_disp_data(self, current_disp, current_volum_strain=None):
         self.displacement_data.append(current_disp)
-        self.displacement_data2.append(self.GetInterfaceData(
-                        self.output_data_name).GetData().reshape((-1, 1)))
+        if self.include_volumetric_strain:
+            self.volum_strain_data.append(current_volum_strain)
+        #self.displacement_data2.append(self.GetInterfaceData(
+        #                self.output_data_name).GetData().reshape((-1, 1)))
         if self.save_tr_data:
             np.save("./coSimData/disp_data.npy",
                     np.asarray(self.displacement_data)[:, :, 0].T)
-            np.save("./coSimData/disp_interf_data.npy",
-                    np.asarray(self.displacement_data2)[:, :, 0].T)
+            if self.include_volumetric_strain:
+                np.save("./coSimData/strain_data.npy",
+                    np.asarray(self.volum_strain_data)[:, :, 0].T)
+            #np.save("./coSimData/disp_interf_data.npy",
+            #        np.asarray(self.displacement_data2)[:, :, 0].T)
 
     def FomSolutionStep(self,):
         super().SolveSolutionStep()
@@ -153,7 +161,12 @@ class StructuralROMWrapper(structural_mechanics_wrapper.StructuralMechanicsWrapp
         else:
             current_load = self.GetInterfaceData(
                 self.input_data_name).GetData().reshape((-1, 1))
-        predicted_disp = self.rom_output(current_load)
+        if self.include_volumetric_strain:
+            pred_arr = self.rom_output(current_load)
+            predicted_disp = pred_arr[:self.SS]
+            predicted_volum_strain = pred_arr[self.SS:]
+        else:
+            predicted_disp = self.rom_output(current_load)
 
         # ======= Predict The interface displacement only ============
         if self.interface_only:
@@ -163,6 +176,9 @@ class StructuralROMWrapper(structural_mechanics_wrapper.StructuralMechanicsWrapp
         else:
             KM.VariableUtils().SetSolutionStepValuesVector(self.ModelPart.Nodes,
                                                         KM.DISPLACEMENT, 1.*predicted_disp, 0)
+            if self.include_volumetric_strain:
+                KM.VariableUtils().SetSolutionStepValuesVector(self.ModelPart.Nodes,
+                                                            KM.VOLUMETRIC_STRAIN, 1.*predicted_volum_strain, 0)
             x_vec = self.x0_vec + 1.*predicted_disp
             KM.VariableUtils().SetCurrentPositionsVector(self.ModelPart.Nodes,1.*x_vec)
             self.ModelPart.GetCommunicator().SynchronizeVariable(KM.DISPLACEMENT)
@@ -213,10 +229,15 @@ class StructuralROMWrapper(structural_mechanics_wrapper.StructuralMechanicsWrapp
                     current_disp = self.GetInterfaceData(
                         self.output_data_name).GetData().reshape((-1, 1))
                 else:
+                    current_volum_strain = None
                     current_disp = KM.VariableUtils().GetSolutionStepValuesVector(
-                        self.ModelPart.Nodes, KM.DISPLACEMENT, 0, 2)
+                        self.ModelPart.Nodes, KM.DISPLACEMENT, 0, self._dimension)
                     current_disp = np.array(current_disp).reshape((-1, 1))
-                self.update_disp_data(current_disp)
+                    if self.include_volumetric_strain:
+                        current_volum_strain = KM.VariableUtils().GetSolutionStepValuesVector(
+                            self.ModelPart.Nodes, KM.VOLUMETRIC_STRAIN, 0)
+                        current_volum_strain = np.array(current_volum_strain).reshape((-1, 1))
+                self.update_disp_data(current_disp, current_volum_strain)
 
     def ToComputeResiduals(self, ):
         #TODO What condition to use in order to compute the residuals ?
@@ -237,10 +258,11 @@ class StructuralROMWrapper(structural_mechanics_wrapper.StructuralMechanicsWrapp
 
     def Initialize(self):
         super().Initialize()
-        np.save("./coSimData/coords_interf.npy",
-                np.asarray(self.GetInterfaceData(self.output_data_name).model_part.GetNodes())[:, :2])
+        self._dimension = self.ModelPart.ProcessInfo[KM.DOMAIN_SIZE]
+        #np.save("./coSimData/coords_interf.npy",
+        #        np.asarray(self.GetInterfaceData(self.output_data_name).model_part.GetNodes())[:, :self._dimension])
 
-        self.SS = self.ModelPart.GetCommunicator().GetDataCommunicator().Sum(self.ModelPart.NumberOfNodes() * 2, 0)
+        self.SS = self.ModelPart.GetCommunicator().GetDataCommunicator().Sum(self.ModelPart.NumberOfNodes() * self._dimension, 0)
         self.SCH = self._analysis_stage._GetSolver()._GetScheme()
         self.BS = self._analysis_stage._GetSolver()._GetBuilderAndSolver()
 
@@ -266,20 +288,21 @@ class StructuralROMWrapper(structural_mechanics_wrapper.StructuralMechanicsWrapp
         self.ids_Dirich = np.in1d(self.ids_global,
                             self.ids_Dirich).nonzero()[0]
 
-        c = np.empty((2*self.ids_interface.size,), dtype=self.ids_interface.dtype)
-        cNoDirich = np.empty((2*self.ids_NoDirich.size,), dtype=self.ids_NoDirich.dtype)
-        cDirich = np.empty((2*self.ids_Dirich.size,), dtype=self.ids_Dirich.dtype)
+        c = np.empty((self._dimension*self.ids_interface.size,), dtype=self.ids_interface.dtype)
+        cNoDirich = np.empty((self._dimension*self.ids_NoDirich.size,), dtype=self.ids_NoDirich.dtype)
+        cDirich = np.empty((self._dimension*self.ids_Dirich.size,), dtype=self.ids_Dirich.dtype)
 
-        cInterior = np.empty((2*self.ids_Interior.size,), dtype=self.ids_Interior.dtype)
+        cInterior = np.empty((self._dimension*self.ids_Interior.size,), dtype=self.ids_Interior.dtype)
 
-        c[::2] = 2*self.ids_interface
-        c[1::2] = 2*self.ids_interface+1
-        cNoDirich[::2] = 2*self.ids_NoDirich
-        cNoDirich[1::2] = 2*self.ids_NoDirich+1
-        cDirich[::2] = 2*self.ids_Dirich
-        cDirich[1::2] = 2*self.ids_Dirich+1
-        cInterior[::2] = 2*self.ids_Interior
-        cInterior[1::2] = 2*self.ids_Interior+1
+        for i in range(self._dimension):
+            c[i::self._dimension] = self._dimension*self.ids_interface + i
+        
+            cNoDirich[i::self._dimension] = self._dimension*self.ids_NoDirich + i
+        
+            cDirich[i::self._dimension] = self._dimension*self.ids_Dirich + i
+
+            cInterior[i::self._dimension] = self._dimension*self.ids_Interior + i
+
 
         self.ids_NoDirich = cNoDirich
         self.ids_Dirich = cDirich
@@ -288,15 +311,15 @@ class StructuralROMWrapper(structural_mechanics_wrapper.StructuralMechanicsWrapp
         self.ids_global = np.array(self.ids_global)
 
         if self.save_tr_data or self.use_map:
-            map_used = np.zeros((2*len(self.ids_global), len(self.ids_interface)))
-            map_used[self.ids_interface, :] = np.eye(len(self.ids_interface), len(self.ids_interface))
+            map_used = np.zeros((self._dimension*len(self.ids_global), len(self.ids_interface)), dtype=int)
+            map_used[self.ids_interface, :] = np.eye(len(self.ids_interface), len(self.ids_interface), dtype=int)
             map_used = map_used.T
-            np.save("./coSimData/map_used.npy", map_used)
+            #np.save("./coSimData/map_used.npy", map_used)
         if self.use_map:
             self.map_used = map_used
 
         # Initial coordinates Vector saved here
-        self.x0_vec = np.array(KM.VariableUtils().GetInitialPositionsVector(self.ModelPart.Nodes,2))
+        self.x0_vec = np.array(KM.VariableUtils().GetInitialPositionsVector(self.ModelPart.Nodes,self._dimension))
 
     def FinalizeSolutionStep(self,):
         if self.use_map and self.is_in_prediction_mode():
@@ -334,7 +357,7 @@ class StructuralROMWrapper(structural_mechanics_wrapper.StructuralMechanicsWrapp
     def export_results(self):
         cs_tools.cs_print_info("Exporting fields on the complete physical domain")
 
-        x0_vec = KM.VariableUtils().GetInitialPositionsVector(self.ModelPart.Nodes,2)
+        x0_vec = KM.VariableUtils().GetInitialPositionsVector(self.ModelPart.Nodes,self._dimension)
         t0 = time.time()
         for i in range(self.u.shape[1]):
 
@@ -371,6 +394,7 @@ class StructuralROMWrapper(structural_mechanics_wrapper.StructuralMechanicsWrapp
             "force_norm"              : "l2",
             "disp_norm"               : "l2",
             "start_collecting_time"   : 0.0,
+            "stop_collecting_time"    : 100.0,
             "imported_model"          : false,
             "save_model"              : false,
             "input_data"              : {},
@@ -378,5 +402,6 @@ class StructuralROMWrapper(structural_mechanics_wrapper.StructuralMechanicsWrapp
             "interface_only"          : false,
             "use_map"                 : true,
             "file"                    : {},
+            "volumetric_strain_dofs"  : false,
             "save_training_data"      : false
         }""")
