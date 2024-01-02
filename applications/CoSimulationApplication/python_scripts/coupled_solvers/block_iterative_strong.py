@@ -10,9 +10,9 @@ import KratosMultiphysics.CoSimulationApplication.co_simulation_tools as cs_tool
 import KratosMultiphysics.CoSimulationApplication.colors as colors
 
 def Create(settings, models, solver_name):
-    return BlockSolver(settings, models, solver_name)
+    return BlockIterativeStrongCoupledSolver(settings, models, solver_name)
 
-class BlockSolver(GaussSeidelStrongCoupledSolver):
+class BlockIterativeStrongCoupledSolver(GaussSeidelStrongCoupledSolver):
     def SolveSolutionStep(self):
         for k in range(self.num_coupling_iterations):
             self.process_info[KratosCoSim.COUPLING_ITERATION_NUMBER] += 1
@@ -36,7 +36,7 @@ class BlockSolver(GaussSeidelStrongCoupledSolver):
 
                 # Apply relaxation for each solver output
                 for conv_acc in self.convergence_accelerators_list:
-                    conv_acc.ComputeAndApplyUpdate(solver_name)
+                    conv_acc.ComputeAndApplyUpdate()
 
             for coupling_op in self.coupling_operations_dict.values():
                 coupling_op.FinalizeCouplingIteration()

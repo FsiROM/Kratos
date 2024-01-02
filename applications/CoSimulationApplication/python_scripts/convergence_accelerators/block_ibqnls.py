@@ -21,22 +21,19 @@ import scipy as sp
 
 def Create(settings):
     cs_tools.SettingsTypeCheck(settings)
-    return IBQNLSConvergenceAccelerator(settings)
+    return BLOCKIBQNLSConvergenceAccelerator(settings)
 
-## Class IBQNLSConvergenceAccelerator.
+## Class BLOCKIBQNLSConvergenceAccelerator.
 # This class contains the implementation of the IBQNLS method and helper functions.
 # Reference: Vierendeels J, Lanoye L, Degroote J, Verdonck PR - Implicit coupling of partitioned fluid–structure interaction
 #  problems with reduced order models. Comput Struct (2007)
-class IBQNLSConvergenceAccelerator(CoSimulationConvergenceAccelerator):
+class BLOCKIBQNLSConvergenceAccelerator(CoSimulationConvergenceAccelerator):
     def __init__( self, settings):
         super().__init__(settings)
 
         horizon = self.settings["iteration_horizon"].GetInt()
         timestep_horizon = self.settings["timestep_horizon"].GetInt()
         self.alpha = self.settings["alpha"].GetDouble()
-        self.alpha2 = self.settings["alpha2"].GetDouble()
-        self.alpha3 = self.settings["alpha3"].GetDouble()
-        self.epsilon = self.settings["epsilon"].GetDouble()
         self.gmres_rel_tol = self.settings["gmres_rel_tol"].GetDouble()
         self.gmres_abs_tol = self.settings["gmres_abs_tol"].GetDouble()
         self.q = timestep_horizon - 1
@@ -51,20 +48,20 @@ class IBQNLSConvergenceAccelerator(CoSimulationConvergenceAccelerator):
         self.W_old = {}
         self.W_new = {}
         self.V_new = {}
-        self.previousV = None
-        self.previousQ = None
-        self.previousR = None
+        self.previous_V = None
+        self.previous_Q = None
+        self.previous_R = None
 
-        for solverData in settings["solver_sequence"].values():
-            self.X_tilde[solverData["data_name"].GetString()] = deque( maxlen = horizon )
-            self.X[solverData["data_name"].GetString()] = deque( maxlen = horizon )
-            self.v_old_matrices[solverData["data_name"].GetString()] = deque( maxlen = self.q )
-            self.w_old_matrices[solverData["data_name"].GetString()] = deque( maxlen = self.q )
-            self.V_old[solverData["data_name"].GetString()] = []
-            self.W_old[solverData["data_name"].GetString()] = []
-            self.V_new[solverData["data_name"].GetString()] = []
-            self.W_new[solverData["data_name"].GetString()] = []
-            self.coupl_data_names[solverData["data_name"].GetString()] = solverData["coupled_data_name"].GetString()
+        for solver_data in settings["solver_sequence"].values():
+            self.X_tilde[solver_data["data_name"].GetString()] = deque( maxlen = horizon )
+            self.X[solver_data["data_name"].GetString()] = deque( maxlen = horizon )
+            self.v_old_matrices[solver_data["data_name"].GetString()] = deque( maxlen = self.q )
+            self.w_old_matrices[solver_data["data_name"].GetString()] = deque( maxlen = self.q )
+            self.V_old[solver_data["data_name"].GetString()] = []
+            self.W_old[solver_data["data_name"].GetString()] = []
+            self.V_new[solver_data["data_name"].GetString()] = []
+            self.W_new[solver_data["data_name"].GetString()] = []
+            self.coupl_data_names[solver_data["data_name"].GetString()] = solver_data["coupled_data_name"].GetString()
 
     ## UpdateSolution(r, x, y, data_name, yResidual)
     # @param r residual r_k
@@ -86,16 +83,16 @@ class IBQNLSConvergenceAccelerator(CoSimulationConvergenceAccelerator):
         if self.echo_level > 3:
             cs_tools.cs_print_info(self._ClassName(), "Number of new modes: ", col )
 
-        isFirstDt = (self.V_old[data_name] == [] and self.W_old [data_name] == [])
-        isFirstiter = (k == 0)
+        is_first_dt = (self.V_old[data_name] == [] and self.W_old [data_name] == [])
+        is_first_iter = (k == 0)
         # ================== First time step ==================================================
-        if isFirstDt:
+        if is_first_dt:
             # ------------------ First iteration (First time step) ---------------------
-            if isFirstiter:
+            if is_first_iter:
                 return self.alpha * r # Initial acceleration to be a constant relaxation
 
         # ------------------ First iteration (Other time steps) ------------------------
-        if isFirstiter:
+        if is_first_iter:
             V = self.V_old[data_name]
             W = self.W_old[data_name]
 
@@ -105,41 +102,33 @@ class IBQNLSConvergenceAccelerator(CoSimulationConvergenceAccelerator):
             for i in range(0, col):
                 self.W_new[data_name][i] = self.X[coupled_data_name][i] - self.X[coupled_data_name][i + 1]
             self.W_new[data_name] = self.W_new[data_name].T
-            W = self._augmentedMatrix(self.W_new[data_name], self.W_old[data_name], isFirstDt)
+            W = self._augmented_matrix(self.W_new[data_name], self.W_old[data_name], is_first_dt)
 
             ## Construct matrix W(differences of intermediate solutions y~)
             self.V_new[data_name] = np.empty( shape = (col, row) ) # will be transposed later
             for i in range(0, col):
                 self.V_new[data_name][i] = self.X_tilde[data_name][i] - self.X_tilde[data_name][i + 1]
             self.V_new[data_name] = self.V_new[data_name].T
-            V = self._augmentedMatrix(self.V_new[data_name], self.V_old[data_name], isFirstDt)
+            V = self._augmented_matrix(self.V_new[data_name], self.V_old[data_name], is_first_dt)
 
         Q, R = np.linalg.qr(W)
-        Q, R, V, W = self.qr_filter(Q, R, V, W)
-        b = r - self.pinvProduct(V, Q, R, yResidual)
-        b += self.alpha3 * Q @ Q.T @ yResidual
+        ##TODO QR Filtering
+        b = r - self.pinv_product(V, Q, R, yResidual)
 
-        if self.previousQ is not None:
+        if self.previous_Q is not None:
             ## Retrieving previous data for the coupled data jacobian approximation ----------------------------------------
-            previousQ = self.previousQ
-            previousR = self.previousR
-            # if self.previousV is not None:
-            #     previousV = self.previousV
-            # else:
-            #     if isFirstDt:
-            #         previousV = self.V_new[coupled_data_name].copy()
-            #     else:
-            #         previousV = np.hstack((self.V_new[coupled_data_name].copy(), self.V_old[coupled_data_name].copy()))
-            previousV = self.previousV
+            previous_Q = self.previous_Q
+            previous_R = self.previous_R
+            if self.previous_V is not None:
+                previous_V = self.previous_V
+            else:
+                if is_first_dt:
+                    previous_V = self.V_new[coupled_data_name].copy()
+                else:
+                    previous_V = np.hstack((self.V_new[coupled_data_name].copy(), self.V_old[coupled_data_name].copy()))
 
             ## Matrix-free implementation of the linear solver (and the pseudoinverse) -------------------------------------
-            def productFunc(vec):
-                orthVec = vec - previousQ @ previousQ.T @ vec
-                prod1 = self.pinvProduct(previousV, previousQ, previousR, vec) - self.alpha2 * orthVec
-                orthVec2 = prod1 - Q @ Q.T @ prod1
-                prod2 = self.pinvProduct(V, Q, R, prod1) - self.alpha3 * orthVec2
-                return vec - prod2
-            block_oper = lambda vec: productFunc(vec)
+            block_oper = lambda vec: vec - self.pinv_product(V, Q, R, self.pinv_product(previous_V, previous_Q, previous_R, vec))
             block_x = sp.sparse.linalg.LinearOperator((row, row), block_oper)
             delta_x, _ = sp.sparse.linalg.gmres( block_x, b, atol=self.gmres_abs_tol, tol=self.gmres_rel_tol )
         else:
@@ -147,43 +136,22 @@ class IBQNLSConvergenceAccelerator(CoSimulationConvergenceAccelerator):
             delta_x = b
 
         ## Saving data for the approximate jacobian for the next iteration
-        self.previousQ = Q.copy()
-        self.previousR = R.copy()
-        # if isFirstiter: # V only needs to be saved completely on the first iteration
-        #     self.previousV = V.copy()
-        # else: # Otherwise it can be retrieved from V_new and V_old and memory is freed
-        #     self.previousV = None
-        self.previousV = V.copy()
+        self.previous_Q = Q.copy()
+        self.previous_R = R.copy()
+        if is_first_iter: # V only needs to be saved completely on the first iteration
+            self.previous_V = V.copy()
+        else: # Otherwise it can be retrieved from V_new and V_old and memory is freed
+            self.previous_V = None
 
         return delta_x
 
-    def qr_filter(self, Q, R, V, W):
-
-        epsilon = self.settings["epsilon"].GetDouble()
-        cols = V.shape[1]
-        i = 0
-        while i < cols:
-            if np.abs(np.diag(R)[i]) < epsilon:
-                if self.echo_level > 2:
-                    cs_tools.cs_print_info(self._ClassName(),
-                                  "QR Filtering")
-                ids_tokeep = np.delete(np.arange(0, cols), i)
-                V = V[:, ids_tokeep]
-                cols = V.shape[1]
-                W = W[:, ids_tokeep]
-                Q, R = np.linalg.qr(V)
-            else:
-                i += 1
-
-        return Q, R, V, W
-
-    def _augmentedMatrix(self, mat, oldMat, isFirstDt):
-        if isFirstDt:
+    def _augmented_matrix(self, mat, old_mat, is_first_dt):
+        if is_first_dt:
             return mat.copy()
         else:
-            return np.hstack( (mat, oldMat) )
+            return np.hstack( (mat, old_mat) )
 
-    def pinvProduct(self, LHS, Q, R, x):
+    def pinv_product(self, LHS, Q, R, x):
         rhs = Q.T @ x
         return LHS @ sp.linalg.solve_triangular(R, rhs)
 
@@ -191,14 +159,12 @@ class IBQNLSConvergenceAccelerator(CoSimulationConvergenceAccelerator):
 
         for data_name in self.W_new:
 
-            # if data_name == list(self.W_new.keys())[-1]: ## Check if last solver in the sequence
-            #     # Saving the V matrix for the next (first) iteration to recover the approximate jacobian
-            #     if len(self.V_old[data_name]) > 0 and len(self.V_new[data_name]) > 0:
-            #         self.previousV = np.hstack((self.V_new[data_name].copy(), self.V_old[data_name].copy()))
-            #     elif len(self.V_new[data_name]) == 0:
-            #         self.previousV = self.V_old[data_name].copy()
-            #     else:
-            #         self.previousV = self.V_new[data_name].copy()
+            if data_name == list(self.W_new.keys())[-1]: ## Check if last solver in the sequence
+                # Saving the V matrix for the next (first) iteration to recover the approximate jacobian
+                if self.V_old[data_name] != []:
+                    self.previous_V = np.hstack((self.V_new[data_name].copy(), self.V_old[data_name].copy()))
+                else:
+                    self.previous_V = self.V_new[data_name].copy()
 
             if self.V_new[data_name] != [] and self.W_new[data_name] != []:
                 self.v_old_matrices[data_name].appendleft( self.V_new[data_name] )
@@ -216,20 +182,14 @@ class IBQNLSConvergenceAccelerator(CoSimulationConvergenceAccelerator):
             self.W_new[data_name] = []
             self.V_new[data_name] = []
 
-    def FinalizeNonLinearIteration(self, current_t = 0., currentCharDisp = 0.):
-        return super().FinalizeNonLinearIteration()
-
     @classmethod
     def _GetDefaultParameters(cls):
         this_defaults = KM.Parameters("""{
             "iteration_horizon" : 15,
             "timestep_horizon"  : 3,
             "alpha"   : 1.0,
-            "alpha2"   : 0.0,
-            "alpha3"   : 0.0,
             "gmres_rel_tol" : 1e-5,
             "gmres_abs_tol" : 1e-14,
-            "epsilon"  : 3e-4,
             "solver_sequence" : []
         }""")
         this_defaults.AddMissingParameters(super()._GetDefaultParameters())
