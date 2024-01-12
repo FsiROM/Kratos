@@ -86,7 +86,7 @@ class ConvergenceAcceleratorWrapper:
             updated_data = self.data_comm.ScattervDoubles(data_to_scatter, 0)
 
         self.interface_data.SetData(updated_data)
-        self.accelerated_load_data.append(self.interface_data.GetData().reshape((-1, 1)))
+        #self.accelerated_load_data.append(self.interface_data.GetData().reshape((-1, 1)))
         # np.save("./coSimData/Acceleratedload_data.npy",
         #         np.asarray(self.accelerated_load_data)[:, :, 0].T)
 

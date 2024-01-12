@@ -311,10 +311,11 @@ class StructuralROMWrapper(structural_mechanics_wrapper.StructuralMechanicsWrapp
         self.ids_global = np.array(self.ids_global)
 
         if self.save_tr_data or self.use_map:
-            map_used = np.zeros((self._dimension*len(self.ids_global), len(self.ids_interface)), dtype=int)
-            map_used[self.ids_interface, :] = np.eye(len(self.ids_interface), len(self.ids_interface), dtype=int)
-            map_used = map_used.T
+            #map_used = np.zeros((self._dimension*len(self.ids_global), len(self.ids_interface)), dtype=int)
+            #map_used[self.ids_interface, :] = np.eye(len(self.ids_interface), len(self.ids_interface), dtype=int)
+            #map_used = map_used.T
             #np.save("./coSimData/map_used.npy", map_used)
+            pass
         if self.use_map:
             self.map_used = map_used
 

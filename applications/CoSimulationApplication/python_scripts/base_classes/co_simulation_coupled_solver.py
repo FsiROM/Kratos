@@ -381,12 +381,29 @@ class CoSimulationCoupledSolver(CoSimulationSolverWrapper):
 
             ValidateAndAssignDefaultsDataList(solver_settings["input_data_list"], GetInputDataDefaults())
             ValidateAndAssignDefaultsDataList(solver_settings["output_data_list"], GetOutputDataDefaults())
+            if solver_settings.Has("rom_receiving_data"):
+                ValidateAndAssignDefaultsDataList(solver_settings["rom_receiving_data"], GetRomDataDefaults())
 
         return solver_cosim_details
 
     def ReceiveRomComponents(self, inputReduc_model=None, regression_model=None, outputReduc_model=None):
         for solver in self.solver_wrappers.values():
             solver.ReceiveRomComponents(inputReduc_model, regression_model, outputReduc_model)
+
+    def _ReceiveRomData(self, solver_name):
+        if self.coupling_sequence[solver_name].Has("rom_receiving_data"):
+            rom_data_list = self.coupling_sequence[solver_name]["rom_receiving_data"]
+            for i in range(rom_data_list.size()):
+                if self.echo_level > 2:
+                    cs_tools.cs_print_info(self._ClassName(), f'Solver "{colors.blue(solver_name)}" is a ROM and is receiving data right now')
+
+                i_rom_data = rom_data_list[i]
+                from_solver_name = i_rom_data["from_solver"].GetString()
+                from_solver_data_name = i_rom_data["from_solver_data"].GetString()
+                solver = self.solver_wrappers[solver_name]
+
+                solver.receive_input_data(self.solver_wrappers[from_solver_name].GetInterfaceData(
+                    from_solver_data_name).GetData().reshape((-1, 1)))
 
 
     @classmethod
@@ -401,6 +418,12 @@ class CoSimulationCoupledSolver(CoSimulationSolverWrapper):
         this_defaults.AddMissingParameters(super()._GetDefaultParameters())
 
         return this_defaults
+
+def GetRomDataDefaults():
+    return KM.Parameters("""{
+        "from_solver"                     : "UNSPECIFIED",
+        "from_solver_data"                : "UNSPECIFIED"
+    }""")
 
 def GetInputDataDefaults():
     return KM.Parameters("""{
