@@ -21,7 +21,9 @@ class ApplyInletProcess(KratosMultiphysics.Process):
             "modulus"         : 0.0,
             "constrained"     : true,
             "direction"       : [1.0,0.0,0.0],
-            "interval"        : [0.0,"End"]
+            "interval"        : [0.0,"End"],
+            "varying"              : false,
+            "varying_par"          : {}
         }
         """)
 
