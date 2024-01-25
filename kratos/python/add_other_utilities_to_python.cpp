@@ -218,6 +218,7 @@ void AddOtherUtilitiesToPython(pybind11::module &m)
         .def(py::init<ModelPart::NodesContainerType&, GenericFunctionUtility::Pointer >() )
         .def("ApplyFunction", &ApplyFunctionToNodesUtility::ApplyFunction)
         .def("ReturnFunction", &ApplyFunctionToNodesUtility::ReturnFunction)
+        .def("ApplyVaryingFunction", &ApplyFunctionToNodesUtility::ApplyVaryingFunction)
         ;
 
     // This is required to recognize the different overloads of ConditionNumberUtility::GetConditionNumber

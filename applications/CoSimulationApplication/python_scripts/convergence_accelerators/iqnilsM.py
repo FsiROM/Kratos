@@ -229,7 +229,7 @@ class IQNILSMConvergenceAccelerator(CoSimulationConvergenceAccelerator):
                 delta_r = -self.R[0]
                 Q, R = np.linalg.qr(V)
                 b = Q.T @ delta_r
-                c = sp.linalg.solve_triangular(R, b)
+                c = sp.linalg.solve_triangular(R, b, check_finite=False)
 
                 # Compute the update
                 delta_x = np.dot(W, c) - delta_r
@@ -272,7 +272,7 @@ class IQNILSMConvergenceAccelerator(CoSimulationConvergenceAccelerator):
                 Q, R = np.linalg.qr(V)
                 Q, R, V, W = self.qr_filter(Q, R, V, W)
                 b = Q.T @ delta_r
-                c = sp.linalg.solve_triangular(R, b)
+                c = sp.linalg.solve_triangular(R, b, check_finite=False)
 
                 # Compute the update
                 delta_x = np.dot(W, c) - delta_r
@@ -333,7 +333,7 @@ class IQNILSMConvergenceAccelerator(CoSimulationConvergenceAccelerator):
                 Q, R = np.linalg.qr(V)
                 Q, R, V, W = self.qr_filter(Q, R, V, W)
                 b = Q.T @ delta_r
-                c = sp.linalg.solve_triangular(R, b)
+                c = sp.linalg.solve_triangular(R, b, check_finite=False)
 
                 # Compute the update
                 delta_x = np.dot(W, c) - delta_r

@@ -100,6 +100,12 @@ public:
      */
     std::vector<double> ReturnFunction(const double t);
 
+    void ApplyVaryingFunction(
+        const Variable<double>& rVariable,
+        const double t,
+        const double coeff
+        );
+
 private:
 
     ///@name Protected member Variables

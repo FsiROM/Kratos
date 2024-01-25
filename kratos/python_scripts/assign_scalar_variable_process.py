@@ -49,7 +49,9 @@ class AssignScalarVariableProcess(KratosMultiphysics.Process):
             "interval"        : [0.0, 1e30],
             "constrained"     : true,
             "value"           : {},
-            "local_axes"      : {}
+            "local_axes"      : {},
+            "varying"         : false,
+            "varying_par"     : {}
         }
         """
         )
@@ -92,6 +94,11 @@ class AssignScalarVariableProcess(KratosMultiphysics.Process):
         else:
             self.table = ReadCsvTableUtility(settings["value"]).Read(self.model_part)
 
+        self.varying = False
+        if settings["varying"].GetBool():
+            self.varying = True
+            self.varying_table = ReadCsvTableUtility(settings["varying_par"]).Read(self.model_part)
+
         # Construct a variable_utils object to speedup fixing
         self.variable_utils = KratosMultiphysics.VariableUtils()
         self.step_is_active = False
@@ -126,7 +133,10 @@ class AssignScalarVariableProcess(KratosMultiphysics.Process):
                     self.value = self.aux_function.CallFunction(0.0,0.0,0.0,current_time,0.0,0.0,0.0)
                     self.variable_utils.SetVariable(self.variable, self.value, self.mesh.Nodes)
                 else: #most general case - space varying function (possibly also time varying)
-                    self.cpp_apply_function_utility.ApplyFunction(self.variable, current_time)
+                    if self.varying:
+                        self.cpp_apply_function_utility.ApplyVaryingFunction(self.variable, current_time,  self.varying_table.GetValue(current_time))
+                    else:
+                        self.cpp_apply_function_utility.ApplyFunction(self.variable, current_time)
             else:
                 self.value = self.table.GetValue(current_time)
                 self.variable_utils.SetVariable(self.variable, self.value, self.mesh.Nodes)

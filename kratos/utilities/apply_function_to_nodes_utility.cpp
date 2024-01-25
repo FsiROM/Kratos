@@ -49,6 +49,34 @@ void ApplyFunctionToNodesUtility::ApplyFunction(
     }
 }
 
+void ApplyFunctionToNodesUtility::ApplyVaryingFunction(
+    const Variable<double>& rVariable,
+    const double t,
+    const double coeff
+    )
+{    
+    // Get function
+    auto& r_function = *mpFunction;
+
+    if(!mpFunction->UseLocalSystem()) {
+        block_for_each(
+            mrNodes,r_function,
+            [&rVariable,&t, &coeff](Node& rNode, GenericFunctionUtility& rFunction) {
+                const double value = rFunction.CallFunction(rNode.X(), rNode.Y(), rNode.Z(), t, rNode.X0(), rNode.Y0(), rNode.Z0()) * coeff;
+                rNode.FastGetSolutionStepValue(rVariable) = value;
+            }
+        );
+    } else {
+        block_for_each(
+            mrNodes,r_function,
+            [&rVariable,&t, &coeff](Node& rNode, GenericFunctionUtility& rFunction) {
+                const double value = rFunction.RotateAndCallFunction(rNode.X(), rNode.Y(), rNode.Z(), t, rNode.X0(), rNode.Y0(), rNode.Z0());
+                rNode.FastGetSolutionStepValue(rVariable) = value * coeff;
+            }
+        );
+    }
+}
+
 /***********************************************************************************/
 /***********************************************************************************/
 
