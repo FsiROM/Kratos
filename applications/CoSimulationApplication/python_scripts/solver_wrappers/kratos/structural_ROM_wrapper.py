@@ -56,6 +56,7 @@ class StructuralROMWrapper(structural_mechanics_wrapper.StructuralMechanicsWrapp
         self.force_norm = self.settings["force_norm"].GetString()
         self.disp_norm = self.settings["disp_norm"].GetString()
         self.include_volumetric_strain = self.settings["volumetric_strain_dofs"].GetBool()
+        self.is_dynamical_ROM = self.settings["is_dynamical"].GetBool()
         self.inputReduc_model = None
         self.regression_model = None
         self.outputReduc_model = None
@@ -118,9 +119,12 @@ class StructuralROMWrapper(structural_mechanics_wrapper.StructuralMechanicsWrapp
         else:
             pass
 
-    def rom_output(self, current_load):
+    def rom_output(self, current_load, previous_disp=None):
 
-        predictedDisp = self.rom_model.pred(current_load).ravel()
+        if not self.is_dynamical_ROM:
+            predictedDisp = self.rom_model.pred(current_load).ravel()
+        else:
+            predictedDisp = self.rom_model.pred(current_load, previous_disp).ravel()
 
         if self.use_map:
             dispArr = np.empty((self.SS, ))
@@ -155,18 +159,22 @@ class StructuralROMWrapper(structural_mechanics_wrapper.StructuralMechanicsWrapp
         super().SolveSolutionStep()
 
     def RomSolutionStep(self,):
+        previous_disp = None
         self.train_rom()
         if self._already_recievedData:
             current_load = self.current_load
         else:
             current_load = self.GetInterfaceData(
                 self.input_data_name).GetData().reshape((-1, 1))
+        if self.is_dynamical_ROM:
+            previous_disp = np.array(KM.VariableUtils().GetSolutionStepValuesVector(
+                        self.ModelPart.Nodes, KM.DISPLACEMENT, 1, self._dimension)).reshape((-1, 1))
         if self.include_volumetric_strain:
             pred_arr = self.rom_output(current_load)
             predicted_disp = pred_arr[:self.SS]
             predicted_volum_strain = pred_arr[self.SS:]
         else:
-            predicted_disp = self.rom_output(current_load)
+            predicted_disp = self.rom_output(current_load, previous_disp)
 
         # ======= Predict The interface displacement only ============
         if self.interface_only:
@@ -179,6 +187,13 @@ class StructuralROMWrapper(structural_mechanics_wrapper.StructuralMechanicsWrapp
             if self.include_volumetric_strain:
                 KM.VariableUtils().SetSolutionStepValuesVector(self.ModelPart.Nodes,
                                                             KM.VOLUMETRIC_STRAIN, 1.*predicted_volum_strain, 0)
+            if self.is_dynamical_ROM:
+                KM.VariableUtils().SetSolutionStepValuesVector(self.ModelPart.Nodes,
+                                                            KM.VELOCITY, 1.*self._ComputePostVelocity(predicted_disp),
+                                                            0)
+                KM.VariableUtils().SetSolutionStepValuesVector(self.ModelPart.Nodes,
+                                                            KM.ACCELERATION, 1.*self._ComputePostAcceleration(predicted_disp),
+                                                            0)
             x_vec = self.x0_vec + 1.*predicted_disp
             KM.VariableUtils().SetCurrentPositionsVector(self.ModelPart.Nodes,1.*x_vec)
             self.ModelPart.GetCommunicator().SynchronizeVariable(KM.DISPLACEMENT)
@@ -256,6 +271,48 @@ class StructuralROMWrapper(structural_mechanics_wrapper.StructuralMechanicsWrapp
 
         return residuals, internalForces
 
+    def _ComputePostVelocity(self, current_u):
+
+        gamma = 0.5
+        beta = 0.25
+        dt = self.ModelPart.ProcessInfo[KM.DELTA_TIME]
+        self.bossak_c0 = (1/(0.25*dt**2))
+        self.bossak_c1 = (gamma/(beta*dt))
+        self.bossak_c2 = (1/(beta*dt))
+        self.bossak_c3 = (0.5/beta) - 1.0
+        self.bossak_c4 = gamma/beta - 1
+        self.bossak_c5 = (dt*0.5*((gamma/beta)-2.0))
+
+        delta_u = current_u - np.array(KM.VariableUtils().GetSolutionStepValuesVector(
+                        self.ModelPart.Nodes, KM.DISPLACEMENT, 1, self._dimension))
+        v_n = np.array(KM.VariableUtils().GetSolutionStepValuesVector(
+                        self.ModelPart.Nodes, KM.VELOCITY, 1, self._dimension))
+        a_n = np.array(KM.VariableUtils().GetSolutionStepValuesVector(
+                        self.ModelPart.Nodes, KM.ACCELERATION, 1, self._dimension))
+
+        return self.bossak_c1 * delta_u - self.bossak_c4 * v_n - self.bossak_c5 * a_n
+
+    def _ComputePostAcceleration(self, current_u):
+
+        gamma = 0.5
+        beta = 0.25
+        dt = self.ModelPart.ProcessInfo[KM.DELTA_TIME]
+        self.bossak_c0 = (1/(0.25*dt**2))
+        self.bossak_c1 = (gamma/(beta*dt))
+        self.bossak_c2 = (1/(beta*dt))
+        self.bossak_c3 = (0.5/beta) - 1.0
+        self.bossak_c4 = gamma/beta - 1
+        self.bossak_c5 = (dt*0.5*((gamma/beta)-2.0))
+
+        delta_u = current_u - np.array(KM.VariableUtils().GetSolutionStepValuesVector(
+                        self.ModelPart.Nodes, KM.DISPLACEMENT, 1, self._dimension))
+        v_n = np.array(KM.VariableUtils().GetSolutionStepValuesVector(
+                        self.ModelPart.Nodes, KM.VELOCITY, 1, self._dimension))
+        a_n = np.array(KM.VariableUtils().GetSolutionStepValuesVector(
+                        self.ModelPart.Nodes, KM.ACCELERATION, 1, self._dimension))
+
+        return self.bossak_c0 * delta_u - self.bossak_c2 * v_n - self.bossak_c3 * a_n
+
     def Initialize(self):
         super().Initialize()
         self._dimension = self.ModelPart.ProcessInfo[KM.DOMAIN_SIZE]
@@ -296,9 +353,9 @@ class StructuralROMWrapper(structural_mechanics_wrapper.StructuralMechanicsWrapp
 
         for i in range(self._dimension):
             c[i::self._dimension] = self._dimension*self.ids_interface + i
-        
+
             cNoDirich[i::self._dimension] = self._dimension*self.ids_NoDirich + i
-        
+
             cDirich[i::self._dimension] = self._dimension*self.ids_Dirich + i
 
             cInterior[i::self._dimension] = self._dimension*self.ids_Interior + i
@@ -404,5 +461,6 @@ class StructuralROMWrapper(structural_mechanics_wrapper.StructuralMechanicsWrapp
             "use_map"                 : true,
             "file"                    : {},
             "volumetric_strain_dofs"  : false,
-            "save_training_data"      : false
+            "save_training_data"      : false,
+            "is_dynamical"            : false
         }""")
