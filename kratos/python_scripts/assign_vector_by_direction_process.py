@@ -40,7 +40,9 @@ class AssignVectorByDirectionProcess(KratosMultiphysics.Process):
             "modulus"              : 0.0,
             "constrained"          : true,
             "direction"            : [1.0, 0.0, 0.0],
-            "local_axes"           : {}
+            "local_axes"           : {},
+            "varying"              : false,
+            "varying_par"          : {}
         }
         """)
 
@@ -82,6 +84,8 @@ class AssignVectorByDirectionProcess(KratosMultiphysics.Process):
             list_params[i_dir].AddValue("interval",settings["interval"])
             list_params[i_dir].AddEmptyValue("variable_name").SetString(settings["variable_name"].GetString() + var_string)
             list_params[i_dir].AddValue("local_axes",settings["local_axes"])
+            list_params[i_dir].AddValue("varying",settings["varying"])
+            list_params[i_dir].AddValue("varying_par",settings["varying_par"])
 
         # "Automatic" direction: get the inwards direction
         all_numeric = True

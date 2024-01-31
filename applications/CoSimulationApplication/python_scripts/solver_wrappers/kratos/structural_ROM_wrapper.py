@@ -31,6 +31,7 @@ class StructuralROMWrapper(structural_mechanics_wrapper.StructuralMechanicsWrapp
         self.map_used = None
         self._already_recievedData = False
         self.rom_model = None
+        self.rom_strain_model = None
 
     def receive_input_data(self, input_data):
 
@@ -96,6 +97,12 @@ class StructuralROMWrapper(structural_mechanics_wrapper.StructuralMechanicsWrapp
                 with open(file["file_name"].GetString(), 'rb') as inp:
                     self.rom_model = pickle.load(inp)
 
+                if self.include_volumetric_strain:
+                    file_strain = self.settings["file_strain"]
+                    import pickle
+                    with open(file_strain["file_name"].GetString(), 'rb') as inp:
+                        self.rom_model_strain = pickle.load(inp)
+
             # ======= Train a ROM model ============
             else:
                 #coords = np.asarray(self.GetInterfaceData(self.output_data_name).model_part.GetNodes())[:, :2]
@@ -125,6 +132,11 @@ class StructuralROMWrapper(structural_mechanics_wrapper.StructuralMechanicsWrapp
             predictedDisp = self.rom_model.pred(current_load).ravel()
         else:
             predictedDisp = self.rom_model.pred(current_load, previous_disp).ravel()
+
+        if self.include_volumetric_strain:
+            if self.rom_model_strain is not None:
+                predictedStrain = self.rom_model_strain.pred(current_load).ravel()
+                predictedDisp = np.concatenate((predictedDisp, predictedStrain))
 
         if self.use_map:
             dispArr = np.empty((self.SS, ))
@@ -231,6 +243,19 @@ class StructuralROMWrapper(structural_mechanics_wrapper.StructuralMechanicsWrapp
         # ======= Predict using the FOM ============
         if not self.is_in_prediction_mode():
             self.FomSolutionStep()
+
+
+            # # TODO !!
+            # correctDisp = KM.VariableUtils().GetSolutionStepValuesVector(
+            #             self.ModelPart.Nodes, KM.DISPLACEMENT, 0, self._dimension)
+            # predictedDisp = self.rom_model.pred(self.current_load).ravel()
+            # abs_tol = np.linalg.norm(correctDisp - predictedDisp)
+            # rel_tol = abs_tol/np.linalg.norm(correctDisp)
+            # print("abs error is ", abs_tol)
+            # print("rel error is ", rel_tol)
+            # del predictedDisp
+            # del correctDisp
+            # # TODO !!
 
         # ======= Predict using the ROM ============
         else:
@@ -379,6 +404,13 @@ class StructuralROMWrapper(structural_mechanics_wrapper.StructuralMechanicsWrapp
         # Initial coordinates Vector saved here
         self.x0_vec = np.array(KM.VariableUtils().GetInitialPositionsVector(self.ModelPart.Nodes,self._dimension))
 
+        # # TODO !!
+        # file = self.settings["file"]
+        # import pickle
+        # with open(file["file_name"].GetString(), 'rb') as inp:
+        #     self.rom_model = pickle.load(inp)
+        # # TODO !!
+
     def FinalizeSolutionStep(self,):
         if self.use_map and self.is_in_prediction_mode():
             self.rom_model.store_last_result()
@@ -460,6 +492,7 @@ class StructuralROMWrapper(structural_mechanics_wrapper.StructuralMechanicsWrapp
             "interface_only"          : false,
             "use_map"                 : true,
             "file"                    : {},
+            "file_strain"                    : {},
             "volumetric_strain_dofs"  : false,
             "save_training_data"      : false,
             "is_dynamical"            : false

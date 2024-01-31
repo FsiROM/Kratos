@@ -31,6 +31,7 @@ class BlockStrongCoupledSolver(GaussSeidelStrongCoupledSolver):
 
             for solver_name, solver in self.solver_wrappers.items():
                 self._SynchronizeInputData(solver_name)
+                self._ReceiveRomData(solver_name)
                 solver.SolveSolutionStep()
                 self._SynchronizeOutputData(solver_name)
 
