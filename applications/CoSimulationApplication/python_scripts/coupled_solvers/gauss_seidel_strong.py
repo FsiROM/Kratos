@@ -205,9 +205,9 @@ class GaussSeidelStrongCoupledSolver(CoSimulationCoupledSolver):
 
             #self._SaveInputflLoad()
             for solver_name, solver in self.solver_wrappers.items():
+                t0 = time.time()
                 self._SynchronizeInputData(solver_name)
                 self._ReceiveRomData(solver_name)
-                t0 = time.time()
                 solver.SolveSolutionStep()
                 t1 = time.time()
                 self._SynchronizeOutputData(solver_name)
@@ -294,8 +294,8 @@ class GaussSeidelStrongCoupledSolver(CoSimulationCoupledSolver):
 
         if solver_name == "fluid":
             self.load_data.append(self.solver_wrappers["fluid"].GetInterfaceData("load").GetData().reshape((-1, 1)))
-            #np.save("./coSimData/outfluid_load_data.npy",
-            #        np.asarray(self.load_data)[:, :, 0].T)
+            np.save("./coSimData/outfluid_load_data.npy",
+                    np.asarray(self.load_data)[:, :, 0].T)
 
             for predictor in self.predictors_list:
                 predictor.ReceiveNewData(self.solver_wrappers["structure"].GetInterfaceData("disp").GetData().reshape((-1, 1)),
