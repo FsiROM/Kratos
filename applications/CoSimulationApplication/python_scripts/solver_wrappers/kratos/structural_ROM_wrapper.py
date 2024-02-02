@@ -126,25 +126,26 @@ class StructuralROMWrapper(structural_mechanics_wrapper.StructuralMechanicsWrapp
         else:
             pass
 
-    def rom_output(self, current_load, previous_disp=None):
+    def rom_output(self, current_load, previous_disp=None, strain=False):
 
-        if not self.is_dynamical_ROM:
-            predictedDisp = self.rom_model.pred(current_load).ravel()
+        if not strain:
+            if not self.is_dynamical_ROM:
+                predictedDisp = self.rom_model.pred(current_load).ravel()
+            else:
+                predictedDisp = self.rom_model.pred(current_load, previous_disp).ravel()
+
         else:
-            predictedDisp = self.rom_model.pred(current_load, previous_disp).ravel()
-
-        if self.include_volumetric_strain:
-            if self.rom_model_strain is not None:
-                predictedStrain = self.rom_model_strain.pred(current_load).ravel()
-                predictedDisp = np.concatenate((predictedDisp, predictedStrain))
-
-        if self.use_map:
-            dispArr = np.empty((self.SS, ))
-            #disp_arr[self.ids_interface] = predictedDisp
-            dispArr[self.ids_interface] = predictedDisp[self.ids_interface]
-            return dispArr
-        else:
-            return predictedDisp
+            if self.include_volumetric_strain:
+                if self.rom_model_strain is not None:
+                    predictedDisp = self.rom_model_strain.pred(current_load).ravel()
+        # if self.use_map:
+        #     dispArr = np.empty((self.SS, ))
+        #     #disp_arr[self.ids_interface] = predictedDisp
+        #     dispArr[self.ids_interface] = predictedDisp[self.ids_interface]
+        #     return dispArr
+        # else:
+        #     return predictedDisp
+        return predictedDisp
 
     def update_load_data(self, current_load):
         self.load_data.append(current_load)
@@ -181,24 +182,24 @@ class StructuralROMWrapper(structural_mechanics_wrapper.StructuralMechanicsWrapp
         if self.is_dynamical_ROM:
             previous_disp = np.array(KM.VariableUtils().GetSolutionStepValuesVector(
                         self.ModelPart.Nodes, KM.DISPLACEMENT, 1, self._dimension)).reshape((-1, 1))
-        if self.include_volumetric_strain:
-            pred_arr = self.rom_output(current_load)
-            predicted_disp = pred_arr[:self.SS]
-            predicted_volum_strain = pred_arr[self.SS:]
-        else:
-            predicted_disp = self.rom_output(current_load, previous_disp)
+        # if self.include_volumetric_strain:
+        #     pred_arr = self.rom_output(current_load)
+        #     predicted_disp = pred_arr[:self.SS]
+        #     predicted_volum_strain = pred_arr[self.SS:]
+        # else:
+        predicted_disp = self.rom_output(current_load, previous_disp)
 
         # ======= Predict The interface displacement only ============
-        if self.interface_only:
+        if self.interface_only or self.use_map:
             self.GetInterfaceData(self.output_data_name).SetData(predicted_disp)
 
         # ======= Filling the displacement StepValuesVector  ============
         else:
             KM.VariableUtils().SetSolutionStepValuesVector(self.ModelPart.Nodes,
                                                         KM.DISPLACEMENT, 1.*predicted_disp, 0)
-            if self.include_volumetric_strain:
-                KM.VariableUtils().SetSolutionStepValuesVector(self.ModelPart.Nodes,
-                                                            KM.VOLUMETRIC_STRAIN, 1.*predicted_volum_strain, 0)
+            # if self.include_volumetric_strain:
+            #     KM.VariableUtils().SetSolutionStepValuesVector(self.ModelPart.Nodes,
+            #                                                 KM.VOLUMETRIC_STRAIN, 1.*predicted_volum_strain, 0)
             if self.is_dynamical_ROM:
                 KM.VariableUtils().SetSolutionStepValuesVector(self.ModelPart.Nodes,
                                                             KM.VELOCITY, 1.*self._ComputePostVelocity(predicted_disp),
@@ -396,7 +397,8 @@ class StructuralROMWrapper(structural_mechanics_wrapper.StructuralMechanicsWrapp
             #map_used = np.zeros((self._dimension*len(self.ids_global), len(self.ids_interface)), dtype=int)
             #map_used[self.ids_interface, :] = np.eye(len(self.ids_interface), len(self.ids_interface), dtype=int)
             #map_used = map_used.T
-            #np.save("./coSimData/map_used.npy", map_used)
+            map_used = self.ids_interface
+            np.save("./coSimData/map_used.npy", map_used)
             pass
         if self.use_map:
             self.map_used = map_used
@@ -412,6 +414,15 @@ class StructuralROMWrapper(structural_mechanics_wrapper.StructuralMechanicsWrapp
         # # TODO !!
 
     def FinalizeSolutionStep(self,):
+        if self.include_volumetric_strain:
+            predicted_strain = self.rom_output(self.GetInterfaceData(self.input_data_name).GetData().reshape((-1, 1)),
+                                               None, strain=True)
+            if self.use_map:
+                self.rom_model_strain.store_last_result()
+            else:
+                KM.VariableUtils().SetSolutionStepValuesVector(self.ModelPart.Nodes,
+                                                                 KM.VOLUMETRIC_STRAIN, 1.*predicted_strain, 0)
+
         if self.use_map and self.is_in_prediction_mode():
             self.rom_model.store_last_result()
             self.saved_out_t.append(self._analysis_stage.time)
@@ -435,6 +446,8 @@ class StructuralROMWrapper(structural_mechanics_wrapper.StructuralMechanicsWrapp
     def Finalize(self):
         if self.use_map and self.rom_model is not None:
             self.u = self.rom_model.return_big_disps()
+            if self.include_volumetric_strain:
+                self.thet = self.rom_model_strain.return_big_disps()
             self.export_results()
 
         super().Finalize()
@@ -458,8 +471,19 @@ class StructuralROMWrapper(structural_mechanics_wrapper.StructuralMechanicsWrapp
 
             x_vec = x0_vec + 1.*self.u[:, i]
             KM.VariableUtils().SetCurrentPositionsVector(self.ModelPart.Nodes,1.*x_vec)
+
+            if self.include_volumetric_strain:
+                KM.VariableUtils().SetSolutionStepValuesVector(self.ModelPart.Nodes,
+                                                        KM.VOLUMETRIC_STRAIN, 1.*self.thet[:, i], 0)
+
             super().OutputSolutionStep()
         t1 = time.time()
+        self.u = None
+        del self.u
+        self.u = None
+        self.thet = None
+        del self.thet
+        self.thet = None
         self.recons_time.append(t1 - t0)
         with open("./coSimData/structure_recons_time.npy", 'wb') as f:
             np.save(f, np.array(self.recons_time))
