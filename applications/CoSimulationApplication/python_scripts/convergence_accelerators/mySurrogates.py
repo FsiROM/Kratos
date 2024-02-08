@@ -5,26 +5,31 @@ from scipy.interpolate import RBFInterpolator
 import collections
 
 class FluidSurrog:
+#    def __init__(self, maxLen = 5000, reTrainThres = 500):
 
-    def __init__(self, maxLen = 4300, reTrainThres = 240):
+    def __init__(self, maxLen = 6900, reTrainThres = 240):
         self.trainIn = collections.deque(maxlen = maxLen)
         self.trainOut = collections.deque(maxlen = maxLen)
         self.maxLen = maxLen
         self.countAugment = 0
         self.reTrainThres = reTrainThres
+        self.retrain_count = 0
+        self.retrain_times = []
 
     def train(self, dispData, fluidPrevData, fluidData, ):
         podLoad = POD()
         self.romLoad = ROM(podLoad)
-        self.romLoad.decompose(fluidData, rank = 50, normalize = False, center = False)
+        self.romLoad.decompose(fluidData, rank = 40, normalize = True, center = True)
         self.podLoad = podLoad
 
         podDisp = POD()
         self.romDisp = ROM(podDisp)
-        self.romDisp.decompose(dispData, rank = .9999, normalize = True, center = True)
+        self.romDisp.decompose(dispData, rank = 9, normalize = True, center = True)
         self.podDisp = podDisp
 
-        input_ = np.vstack((podDisp.pod_coeff, podLoad.project(fluidPrevData))).T
+        input_ = np.vstack((podDisp.pod_coeff, podLoad.project(
+            self.romLoad.normalize(self.romLoad.center(fluidPrevData)))
+                           )).T
 
         for i in range(input_.shape[0]):
             self.trainIn.appendleft(input_.T[:, [i]])
@@ -33,10 +38,10 @@ class FluidSurrog:
         self.func = RBFInterpolator(input_.copy(), podLoad.pod_coeff.T,
                                     kernel = 'cubic', smoothing=9.5e-2)
 
-    def augmentData(self, newdispData, newfluidPrevData, newfluidData):
+    def augmentData(self, newdispData, newfluidPrevData, newfluidData, current_t=-1.):
         dispCoeff = self.podDisp.project(self.romDisp.normalize(self.romDisp.center(newdispData)))
-        prevLoadCoeff = self.podLoad.project(newfluidPrevData)
-        outLoadCoeff = self.podLoad.project(newfluidData)
+        prevLoadCoeff = self.podLoad.project( self.romLoad.normalize(self.romLoad.center(newfluidPrevData)))
+        outLoadCoeff = self.podLoad.project( self.romLoad.normalize(self.romLoad.center(newfluidData)))
         input_ = np.vstack((dispCoeff, prevLoadCoeff))
 
         self.trainIn.appendleft(input_.copy())
@@ -45,6 +50,8 @@ class FluidSurrog:
         self.countAugment += 1
         if self.countAugment > self.reTrainThres:
             self._reTrain()
+            self.retrain_count += 1
+            self.retrain_times.append(current_t)
             self.countAugment = 0
 
     def _reTrain(self, ):
@@ -56,9 +63,12 @@ class FluidSurrog:
     def predict(self, newDisp, newPrevLoad, ):
 
         coeffAllDisp = self.podDisp.project(self.romDisp.normalize(self.romDisp.center(newDisp)))
-        xTest = np.vstack((coeffAllDisp, self.podLoad.project(newPrevLoad)))
+        xTest = np.vstack((coeffAllDisp, self.podLoad.project(self.romLoad.normalize(self.romLoad.center(
+            newPrevLoad)))
+                          ))
         LoadReconsCoeff = self.func(xTest.T).T
-        predicted_ = self.podLoad.inverse_project(LoadReconsCoeff)
+        predicted_ = self.romLoad.decenter(self.romLoad.denormalize(
+            self.podLoad.inverse_project(LoadReconsCoeff)))
         return predicted_
 
 class FluidSurrogBrute:

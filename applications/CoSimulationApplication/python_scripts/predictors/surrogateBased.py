@@ -23,16 +23,22 @@ class SurrogatePredictor(CoSimulationPredictor):
         self.rel_tolerance = self.settings["rel_tolerance"].GetDouble()
         self.maxIter = self.settings["max_iters"].GetInt()
         self.w0 = self.settings["w0"].GetDouble()
+        self.save_log = self.settings["save_log"].GetBool()
         fluidSurrofFileName = self.settings["file_nameFluid"].GetString()
         solidROMFileName = self.settings["file_nameSolid"].GetString()
-        self.map = np.load("./coSimData/MeshData/map_used.npy")
         self.fluidSurrogate = FluidSurrog()
         with open(fluidSurrofFileName, 'rb') as inp:
             self.fluidSurrogate = pickle.load(inp)
         self.solidSurrogate = solid_ROM()
-        # with open("./ROMs/Double_ROM_models/accelTestGlobal.pkl", 'rb') as inp:
         with open(solidROMFileName, 'rb') as inp:
             self.solidSurrogate = pickle.load(inp)
+        self._local_iter = None
+        self._success = None
+        self._local_resid = None
+        if self.save_log:
+            self.local_iters = []
+            self.local_successes = []
+            self.local_resid = []
 
         self.previousX = None
         self.surrJac = None
@@ -44,7 +50,7 @@ class SurrogatePredictor(CoSimulationPredictor):
         if self.currentT >= self.launch_time and self.currentT >= self.launch_retrain :
             if self.previousX is not None:
                 prevX = self.previousX.reshape((-1, 1))
-                self.fluidSurrogate.augmentData(newDisp, prevX, newLoad)
+                self.fluidSurrogate.augmentData(newDisp, prevX, newLoad, self.currentT)
 
     def Predict(self):
         if not self.interface_data.IsDefinedOnThisRank(): return
@@ -56,44 +62,30 @@ class SurrogatePredictor(CoSimulationPredictor):
 
             pred_ = initial_data.copy()
             isConverged = False
-            R = deque( maxlen = 20 )
-            X = deque( maxlen = 20 )
+            # R = deque( maxlen = 20 )
+            # X = deque( maxlen = 20 )
             # R = []
             # X = []
             if self.previousX is not None:
                 i = 0
                 while i<self.maxIter and not isConverged:
                     print("iteration ", i)
-                    solidSol = self.map @ self.solidSurrogate.pred(pred_.reshape((-1, 1)))
-                    #solidSol = self.solidSurrogate.pred(pred_.reshape((-1, 1)))
+                    self._local_iter = i
+                    solidSol = self.solidSurrogate.pred(pred_.reshape((-1, 1)))
                     fluidSol = self.fluidSurrogate.predict(solidSol, self.previousX[:, np.newaxis]).ravel()
                     newResiduals = fluidSol - pred_
                     nrm = np.linalg.norm(newResiduals)
-                    print(nrm)
-                    if (np.linalg.norm(newResiduals) > 3*np.linalg.norm(pred_)) and i > 1:
+                    pred_norm = np.linalg.norm(pred_)
+                    print(nrm/pred_norm)
+                    if (nrm > 3*pred_norm) and i > 1:
+                        self._success = 0
+                        self._local_resid = nrm/pred_norm
                         return
-                    R.appendleft(newResiduals.ravel().copy())
-                    X.appendleft(pred_.ravel().copy())
 
-                    # if len(R) > 1:
-                    #     deltaX = np.empty((len(R)-1, len(pred_)))
-                    #     deltaR = np.empty((len(R)-1, len(pred_)))
-                    #     for i in range(len(R)-1):
-                    #         deltaX[i] = X[i] - X[i+1]
-                    #         deltaR[i] = R[i] - R[i+1]
-                    #     deltaX = deltaX.T
-                    #     deltaR = deltaR.T
-
-                    #     self.surrJac = deltaX @ np.linalg.pinv(deltaR)
-
-                    if (np.linalg.norm(newResiduals)/np.linalg.norm(pred_)) < self.rel_tolerance:
+                    if (nrm/pred_norm) < self.rel_tolerance:
                         isConverged = True
-
-                    # if not isConverged:
-                    #     if len(R) > 1:
-                    #         pred_ = pred_ - self.surrJac @ newResiduals - (-newResiduals + deltaR @ np.linalg.pinv(deltaR) @ newResiduals)
-                    #     else:
-                    #         pred_ = w * fluidSol.ravel() + (1-w) * pred_.ravel()
+                        self._success = 1
+                        self._local_resid = nrm/pred_norm
 
                     if not isConverged:
                         if i > 1:
@@ -104,30 +96,10 @@ class SurrogatePredictor(CoSimulationPredictor):
                         pred_ = w * fluidSol.ravel() + (1-w) * pred_.ravel()
                     i+=1
 
-            # if len(R)>1:
-            #     self.surrQ , _ = np.linalg.qr(deltaR)
-
             if isConverged:
                 self._UpdateData(fluidSol)
             else:
                 return
-
-            if len(R) > 2 and isConverged:
-                deltaX = np.empty((len(R)-1, len(pred_)))
-                deltaR = np.empty((len(R)-1, len(pred_)))
-                for i in range(len(R)-1):
-                    deltaX[i] = X[i] - X[i+1]
-                    deltaR[i] = R[i] - R[i+1]
-                deltaX = deltaX.T
-                deltaR = deltaR.T
-
-                self.surrJac = deltaX @ np.linalg.pinv(deltaR, rcond=1e-7)
-                surrQ , surrR = np.linalg.qr(deltaR)
-
-                surrQ, surrR, deltaR, deltaX = self.qr_filter(surrQ, surrR, deltaR, deltaX)
-                self.surrR = surrR
-                self.surrQ = surrQ
-                self.deltaX = deltaX
 
     def qr_filter(self, Q, R, V, W):
 
@@ -151,6 +123,19 @@ class SurrogatePredictor(CoSimulationPredictor):
         self.surrJac = None
         self.surrQ = None
         self.previousX = self.interface_data.GetData().copy()
+        if self.save_log:
+            self.local_iters.append(self._local_iter)
+            self.local_resid.append(self._local_resid)
+            self.local_successes.append(self._success)
+
+    def Finalize(self):
+        super().Finalize()
+        if self.save_log:
+            np.save("./coSimData/local_iters.npy", np.array(self.local_iters))
+            np.save("./coSimData/local_resid.npy", np.array(self.local_resid))
+            np.save("./coSimData/local_successes.npy", np.array(self.local_successes))
+            np.save("./coSimData/number_of_retrainings.npy", np.array(self.fluidSurrogate.retrain_count))
+            np.save("./coSimData/moments_of_retrainings.npy", np.array(self.fluidSurrogate.retrain_times))
 
     def ReceiveTime(self, t):
         self.currentT = t
@@ -164,7 +149,8 @@ class SurrogatePredictor(CoSimulationPredictor):
             "w0"                     : 0.04,
             "retraining_launch_time" : 100,
             "file_nameFluid"              : "",
-            "file_nameSolid"              : ""
+            "file_nameSolid"              : "",
+            "save_log"                    : true
         }""")
         this_defaults.AddMissingParameters(super()._GetDefaultParameters())
         return this_defaults
