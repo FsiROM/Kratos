@@ -99,7 +99,7 @@ class StructuralROMWrapper(structural_mechanics_wrapper.StructuralMechanicsWrapp
 
                 if self.include_volumetric_strain:
                     file_strain = self.settings["file_strain"]
-                    import pickle
+                    self.rom_model_strain = solid_rom.solid_ROM()
                     with open(file_strain["file_name"].GetString(), 'rb') as inp:
                         self.rom_model_strain = pickle.load(inp)
 
@@ -190,14 +190,20 @@ class StructuralROMWrapper(structural_mechanics_wrapper.StructuralMechanicsWrapp
         predicted_disp = self.rom_output(current_load, previous_disp)
 
         # ======= Predict The interface displacement only ============
-        if self.interface_only or self.use_map:
+        if self.interface_only:
             self.GetInterfaceData(self.output_data_name).SetData(predicted_disp)
 
         # ======= Filling the displacement StepValuesVector  ============
         else:
-            KM.VariableUtils().SetSolutionStepValuesVector(self.ModelPart.Nodes,
+            if not self.use_map:
+                KM.VariableUtils().SetSolutionStepValuesVector(self.ModelPart.Nodes,
                                                         KM.DISPLACEMENT, 1.*predicted_disp, 0)
-            # if self.include_volumetric_strain:
+            else:
+                disp_arr = np.empty((self.SS, ))
+                disp_arr[self.ids_interface] = predicted_disp
+                KM.VariableUtils().SetSolutionStepValuesVector(self.ModelPart.Nodes,
+                                                        KM.DISPLACEMENT, disp_arr.copy(), 0)
+                # if self.include_volumetric_strain:
             #     KM.VariableUtils().SetSolutionStepValuesVector(self.ModelPart.Nodes,
             #                                                 KM.VOLUMETRIC_STRAIN, 1.*predicted_volum_strain, 0)
             if self.is_dynamical_ROM:
@@ -207,8 +213,9 @@ class StructuralROMWrapper(structural_mechanics_wrapper.StructuralMechanicsWrapp
                 KM.VariableUtils().SetSolutionStepValuesVector(self.ModelPart.Nodes,
                                                             KM.ACCELERATION, 1.*self._ComputePostAcceleration(predicted_disp),
                                                             0)
-            x_vec = self.x0_vec + 1.*predicted_disp
-            KM.VariableUtils().SetCurrentPositionsVector(self.ModelPart.Nodes,1.*x_vec)
+            if not self.use_map:
+                x_vec = self.x0_vec + 1.*predicted_disp
+                KM.VariableUtils().SetCurrentPositionsVector(self.ModelPart.Nodes,1.*x_vec)
             self.ModelPart.GetCommunicator().SynchronizeVariable(KM.DISPLACEMENT)
 
         if not self.use_map:
@@ -414,14 +421,14 @@ class StructuralROMWrapper(structural_mechanics_wrapper.StructuralMechanicsWrapp
         # # TODO !!
 
     def FinalizeSolutionStep(self,):
-        if self.include_volumetric_strain:
+        if self.include_volumetric_strain and self.is_in_prediction_mode():
             predicted_strain = self.rom_output(self.GetInterfaceData(self.input_data_name).GetData().reshape((-1, 1)),
                                                None, strain=True)
-            if self.use_map:
-                self.rom_model_strain.store_last_result()
-            else:
-                KM.VariableUtils().SetSolutionStepValuesVector(self.ModelPart.Nodes,
-                                                                 KM.VOLUMETRIC_STRAIN, 1.*predicted_strain, 0)
+            #if self.use_map:
+            #    self.rom_model_strain.store_last_result()
+            #else:
+            KM.VariableUtils().SetSolutionStepValuesVector(self.ModelPart.Nodes, 
+                    KM.VOLUMETRIC_STRAIN, 1.*predicted_strain, 0)
 
         if self.use_map and self.is_in_prediction_mode():
             self.rom_model.store_last_result()
@@ -446,8 +453,8 @@ class StructuralROMWrapper(structural_mechanics_wrapper.StructuralMechanicsWrapp
     def Finalize(self):
         if self.use_map and self.rom_model is not None:
             self.u = self.rom_model.return_big_disps()
-            if self.include_volumetric_strain:
-                self.thet = self.rom_model_strain.return_big_disps()
+            #if self.include_volumetric_strain:
+            #    self.thet = self.rom_model_strain.return_big_disps()
             self.export_results()
 
         super().Finalize()
@@ -472,9 +479,9 @@ class StructuralROMWrapper(structural_mechanics_wrapper.StructuralMechanicsWrapp
             x_vec = x0_vec + 1.*self.u[:, i]
             KM.VariableUtils().SetCurrentPositionsVector(self.ModelPart.Nodes,1.*x_vec)
 
-            if self.include_volumetric_strain:
-                KM.VariableUtils().SetSolutionStepValuesVector(self.ModelPart.Nodes,
-                                                        KM.VOLUMETRIC_STRAIN, 1.*self.thet[:, i], 0)
+            #if self.include_volumetric_strain:
+            #    KM.VariableUtils().SetSolutionStepValuesVector(self.ModelPart.Nodes,
+            #                                            KM.VOLUMETRIC_STRAIN, 1.*self.thet[:, i], 0)
 
             super().OutputSolutionStep()
         t1 = time.time()
