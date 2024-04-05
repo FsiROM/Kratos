@@ -97,7 +97,7 @@ class ArterySolver(object):
 
     def SolveSolutionStep(self):
         self.xData.append(self.pressure.reshape((-1, 1)))
-        if self.time <= 0.:
+        if self.time <= 5000.0:
             self.Section = self.solid_fom(self.pressure)
 
         else:
@@ -105,7 +105,8 @@ class ArterySolver(object):
                 # self.sol_rom.train(np.hstack(self.xData), np.hstack(self.yData), rank_disp=25, rank_pres=25,
                 #                    regression_model="RBF", dispReduc_model="POD", norm_regr=[False, True],
                 #                    norm=["minmax", "minmax"])
-                with open('./rom_good_data/accelTestGlobal.pkl', 'rb') as inp:
+                # with open('./rom_good_data/accelTestGlobal.pkl', 'rb') as inp:
+                with open('./rom_good_data/strongerROM.pkl', 'rb') as inp:
                     self.sol_rom = pickle.load(inp)
                 self.trainedROM = True
                 # with open('accelTestGlobal.pkl', 'wb') as outp:

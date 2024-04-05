@@ -30,6 +30,11 @@ class GaussSeidelStrongCoupledSolver(CoSimulationCoupledSolver):
         # =========== Saving data ===========
         os.makedirs(os.path.dirname("./coSimData/"), exist_ok=True)
         self.iterations_table = []
+        self.energy_struc = []
+        self.energy_delta_struc = []
+        self.energy_delta_fluid = []
+        self.delta_E = []
+        self.energy_fluid = []
         self.x_last = []
         self.input_fl_load = []
         self.solvers_times = {keys["name"].GetString():[] for keys in self.settings["coupling_sequence"].values()}
@@ -38,14 +43,6 @@ class GaussSeidelStrongCoupledSolver(CoSimulationCoupledSolver):
             self.launch_train = self.settings["training_launch_time"].GetDouble()
             self.end_train = self.settings["training_end_time"].GetDouble()
 
-        # =========== Initial Guess/Surrogate Settings ===========
-        # self.previous_surrogate_sol = None
-        # self.accel_solver =  self.settings["convergence_accelerators"][0]["solver"].GetString()
-        # self.accel_data =  self.settings["convergence_accelerators"][0]["data_name"].GetString()
-        # self.do_initial_guess = self.settings["initial_guess"].GetBool()
-        # self.initial_guess_Tstart = self.settings["initial_guess_launch_time"].GetDouble()
-        # self.fl_rom_model = None
-        # self.sol_rom_initialG = None
 
         # =========== Second interface Settings ===========
         # self.launch_predict = self.settings["prediction_launch_time"].GetDouble()
@@ -105,52 +102,6 @@ class GaussSeidelStrongCoupledSolver(CoSimulationCoupledSolver):
         else:
             return self.sol_rom_initialG
 
-    # def InitialGuess(self, previous_load, initial_disp):
-
-    #     fl_rom_model = self._Get_fl_model()
-    #     sol_rom_initialG = self._Get_sol_model()
-    #     resid_norm = 100.
-    #     w = 0.08
-    #     past_iter_load = previous_load.copy()
-    #     updated_disp = sol_rom_initialG.pred(previous_load.reshape((-1, 1)))
-    #     inferred_load = fl_rom_model.predict(updated_disp,
-    #                                                 previous_load.reshape((-1, 1)))
-    #     new_load = inferred_load.copy()
-    #     r = new_load - previous_load.reshape((-1, 1))
-    #     past_iter_r = r.copy()
-    #     past_iter_load = new_load.copy()
-    #     k = 0
-    #     R = []
-    #     X = []
-    #     inv_J = None
-
-    #     while resid_norm > 1e-5:
-    #         if k>30:
-    #             return None
-    #         if k == 0:
-    #             new_load = w * inferred_load + (1 - w) * past_iter_load.reshape((-1, 1))
-    #         else:
-    #             inv_J = np.array(X)[:, :, 0].T @ np.linalg.pinv(np.array(R)[:, :, 0].T)
-    #             new_load = past_iter_newload - inv_J @ r + r
-
-    #         updated_disp = sol_rom_initialG.pred(new_load)
-    #         inferred_load = fl_rom_model.predict(updated_disp,
-    #                                                     previous_load.reshape((-1, 1)))
-    #         r = inferred_load - new_load
-    #         resid_norm = np.linalg.norm(r)/np.linalg.norm(new_load)
-
-    #         R.append(r - past_iter_r)
-    #         X.append(inferred_load - past_iter_load)
-
-    #         past_iter_load = inferred_load.copy()
-    #         past_iter_newload = new_load.copy()
-    #         past_iter_r = r.copy()
-    #         print("\n residual is ", resid_norm)
-    #         k+=1
-    #     self.solver_wrappers[self.accel_solver].GetInterfaceData(self.accel_data).SetData(previous_load + (inferred_load.ravel() - self.previous_surrogate_sol))
-    #     self.previous_surrogate_sol = inferred_load.ravel()
-    #     return inv_J
-
     def InitializeSolutionStep(self):
         super().InitializeSolutionStep()
 
@@ -161,21 +112,7 @@ class GaussSeidelStrongCoupledSolver(CoSimulationCoupledSolver):
             conv_crit.InitializeSolutionStep()
 
         self.process_info[KratosCoSim.COUPLING_ITERATION_NUMBER] = 0
-        # if self.do_initial_guess:
-        #     # Initial Surrogate SOL
-        #     if self.previous_surrogate_sol is None:
-        #         self.previous_surrogate_sol = self.solver_wrappers[self.accel_solver].GetInterfaceData(self.accel_data).GetData()
 
-        #     if self.is_in_IGuess_prediction_mode():
-        #         print("\n Performing an Initial Guess \n")
-        #         inv_J = self.InitialGuess(self.solver_wrappers[self.accel_solver].GetInterfaceData(self.accel_data).GetData(),
-        #                         self.solver_wrappers["structure"].GetInterfaceData("disp").GetData())
-        #         if inv_J is not None:
-        #             for conv_acc in self.convergence_accelerators_list:
-        #                 conv_acc.ReceiveJacobian(inv_J)
-
-    # def is_in_IGuess_prediction_mode(self, ):
-    #     return self.process_info[KM.TIME] >= self.initial_guess_Tstart
 
     def FinalizeSolutionStep(self):
         super().FinalizeSolutionStep()
@@ -212,14 +149,35 @@ class GaussSeidelStrongCoupledSolver(CoSimulationCoupledSolver):
                 t1 = time.time()
                 self._SynchronizeOutputData(solver_name)
                 self._SaveTimes(solver_name, t1-t0)
+                # if solver_name == "structure":
+                #     energy = np.sum(0.5 * (self.solver_wrappers["structure"].GetInterfaceData("load").GetData() * self.solver_wrappers["structure"].GetInterfaceData("disp").GetData()))
+                #     delta_energy = energy*1.0
+                #     delta_energy -= np.sum(0.5 * (self.solver_wrappers["structure"].GetInterfaceData("load").GetData(1) * self.solver_wrappers["structure"].GetInterfaceData("disp").GetData(1)))
+                #     self.energy_delta_struc.append(delta_energy)
+                #     self.energy_struc.append(energy)
+                #     with open("./coSimData/structure_delta_energy.npy", 'wb') as f:
+                #         np.save(f, np.array(self.energy_delta_struc))
+                #     with open("./coSimData/structure_energy.npy", 'wb') as f:
+                #         np.save(f, np.array(self.energy_struc))
+                # if solver_name == "fluid":
+                #     delta_energy = (-self.solver_wrappers["fluid"].GetInterfaceData("load").GetData()
+                #                      * (self.solver_wrappers["fluid"].GetInterfaceData("disp").GetData() -
+                #                         self.solver_wrappers["fluid"].GetInterfaceData("disp").GetData(1)))
+                #     self.energy_delta_fluid.append(np.sum(delta_energy))
+                #     with open("./coSimData/fluid_delta_energy.npy", 'wb') as f:
+                #         np.save(f, np.array(self.energy_delta_fluid))
+
+                #     deltaE = np.sum(0.5 * self.solver_wrappers["fluid"].GetInterfaceData("load").GetData() * self.solver_wrappers["fluid"].GetInterfaceData("disp").GetData())
+                #     deltaE += np.sum(self.solver_wrappers["fluid"].GetInterfaceData("disp").GetData(1) * (-(self.solver_wrappers["fluid"].GetInterfaceData("load").GetData() - 0.5 * self.solver_wrappers["fluid"].GetInterfaceData("load").GetData(1))))
+                #     self.delta_E.append(deltaE)
+                #     with open("./coSimData/deltaE.npy", 'wb') as f:
+                #         np.save(f, np.array(self.delta_E))
 
             for coupling_op in self.coupling_operations_dict.values():
                 coupling_op.FinalizeCouplingIteration()
 
             for conv_acc in self.convergence_accelerators_list:
                 conv_acc.FinalizeNonLinearIteration(self.process_info[KM.TIME])
-                # current_CharDisp = self.solver_wrappers["structure"].GetInterfaceData("disp").GetData()[0]
-                # conv_acc.FinalizeNonLinearIteration(self.process_info[KM.TIME], current_CharDisp)
 
             for conv_crit in self.convergence_criteria_list:
                 conv_crit.FinalizeNonLinearIteration()
@@ -295,7 +253,7 @@ class GaussSeidelStrongCoupledSolver(CoSimulationCoupledSolver):
         if solver_name == "fluid":
             self.load_data.append(self.solver_wrappers["fluid"].GetInterfaceData("load").GetData().reshape((-1, 1)))
             np.save("./coSimData/outfluid_load_data.npy",
-                    np.asarray(self.load_data)[:, :, 0].T)
+                   np.asarray(self.load_data)[:, :, 0].T)
 
             for predictor in self.predictors_list:
                 predictor.ReceiveNewData(self.solver_wrappers["structure"].GetInterfaceData("disp").GetData().reshape((-1, 1)),

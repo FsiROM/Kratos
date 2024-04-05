@@ -178,9 +178,9 @@ class CoSimulationCoupledSolver(CoSimulationSolverWrapper):
         for solver in self.solver_wrappers.values():
             solver.Predict()
 
-        # for predictor in self.predictors_list:
-        #     for convAcc in self.convergence_accelerators_list:
-        #         convAcc.ReceiveJacobian(predictor.surrJac, predictor.surrQ, predictor.surrR, predictor.deltaX)
+        for predictor in self.predictors_list:
+            for convAcc in self.convergence_accelerators_list:
+                convAcc.ReceiveJacobian(predictor.surrJac, predictor.surrQ, predictor.surrR, predictor.deltaX)
 
     def InitializeSolutionStep(self):
         for solver in self.solver_wrappers.values():
@@ -193,11 +193,11 @@ class CoSimulationCoupledSolver(CoSimulationSolverWrapper):
             coupling_operation.InitializeSolutionStep()
 
     def FinalizeSolutionStep(self):
-        for solver in self.solver_wrappers.values():
-            solver.FinalizeSolutionStep()
-
         for predictor in self.predictors_list:
             predictor.FinalizeSolutionStep()
+
+        for solver in self.solver_wrappers.values():
+            solver.FinalizeSolutionStep()
 
         for coupling_operation in self.coupling_operations_dict.values():
             coupling_operation.FinalizeSolutionStep()

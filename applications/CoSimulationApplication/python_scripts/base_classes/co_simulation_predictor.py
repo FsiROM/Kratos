@@ -63,6 +63,7 @@ class CoSimulationPredictor:
         return KM.Parameters("""{
             "type"       : "UNSPECIFIED",
             "solver"     : "UNSPECIFIED",
+            "solverY"     : "UNSPECIFIED",
             "data_name"  : "UNSPECIFIED",
             "echo_level" : 0
         }""")

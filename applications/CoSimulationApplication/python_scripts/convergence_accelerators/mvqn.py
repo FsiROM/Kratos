@@ -107,6 +107,9 @@ class MVQNConvergenceAccelerator(CoSimulationConvergenceAccelerator):
             self.R.clear()
             self.X.clear()
 
+    def ReceiveJacobian(self, J):
+        pass
+
     @classmethod
     def _GetDefaultParameters(cls):
         this_defaults = KM.Parameters("""{

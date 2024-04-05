@@ -90,6 +90,9 @@ class ConvergenceAcceleratorWrapper:
         # np.save("./coSimData/Acceleratedload_data.npy",
         #         np.asarray(self.accelerated_load_data)[:, :, 0].T)
 
+    def ReceiveJacobian(self, J, Q, R, deltaX):
+        self.conv_acc.ReceiveJacobian(J)
+
     def PrintInfo(self):
         self.conv_acc.PrintInfo()
 
@@ -221,7 +224,7 @@ class BlockConvergenceAcceleratorWrapper:
         self.conv_acc.ReceivePredictedSol(2*self.interface_data.GetData(0) - self.interface_data.GetData(1))
 
     def ReceiveJacobian(self, J, Q, R, deltaX):
-        self.conv_acc.ReceiveJacobian(J, Q, R, deltaX)
+        self.conv_acc.ReceiveJacobian(J)
 
 class ConvergenceAcceleratorResidual(metaclass=ABCMeta):
     @abstractmethod
