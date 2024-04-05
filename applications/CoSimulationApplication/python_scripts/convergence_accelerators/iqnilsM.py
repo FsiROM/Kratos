@@ -106,15 +106,11 @@ class IQNILSMConvergenceAccelerator(CoSimulationConvergenceAccelerator):
 
     def ReceiveJacobian(self, jacobian):
         self.train_surrogate()
-        self.surr_J = jacobian
+        if jacobian is not None:
+            self.surr_J = jacobian.copy()
 
     def train_surrogate(self):
         if not self.surrogate_istrained:
-            """
-            self.surrogate_model.train(np.load("./model_arch_saved/label_data.npy"), np.load("./model_arch_saved/r_orth_data.npy"), np.load(
-                "./model_arch_saved/subsp_dims_data.npy"), np.load("./model_arch_saved/subsp_dists_data.npy"), "./model_arch_saved/surrog_accel.pt")
-            self.surrogate_istrained = True
-            """
             pass
 
     def is_in_training_region(self, current_t):
@@ -235,13 +231,18 @@ class IQNILSMConvergenceAccelerator(CoSimulationConvergenceAccelerator):
                 delta_x = np.dot(W, c) - delta_r
 
                 if self.is_in_prediction_region(current_t) or self.is_in_training_region(current_t):
-                    self._train_w()
-                    paral_part = Q @ b
-                    _, s, _ = np.linalg.svd(Q.T @ np.eye(row, V.shape[1]))
-                    angles = self._AnglesFromS(np.arccos(s), row)
-                    delt_r_orth = delta_r - paral_part
-                    dist = np.linalg.norm(np.arccos(s))
-                    dim = V.shape[1]
+                    pass
+                    # paral_part = Q @ b
+                    # delt_r_orth = delta_r - paral_part
+                    # _, s, _ = np.linalg.svd(Q.T @ np.eye(row, V.shape[1]))
+                    # angles = self._AnglesFromS(np.arccos(s), row)
+                    # dist = np.linalg.norm(np.arccos(s))
+                    # dim = V.shape[1]
+                    # self.ort_w = self._GetOrth_w(x+r, self.currentCharDisp, dist, dim)
+
+                    # # Compute the orthogonal part
+                    # deltax_ort = (1 - self.ort_w) * delta_r - (1 - self.ort_w) * paral_part
+                    # delta_x += deltax_ort
 
                 if self.is_in_training_region(current_t):
                     self._SaveData(x, delta_x + delta_r -
@@ -277,18 +278,18 @@ class IQNILSMConvergenceAccelerator(CoSimulationConvergenceAccelerator):
                 # Compute the update
                 delta_x = np.dot(W, c) - delta_r
 
-                if self.is_in_prediction_region(current_t) or self.is_in_training_region(current_t):
+                if self.is_in_prediction_region(current_t) or self.is_in_training_region(current_t) and self.surr_J is not None:
                     paral_part = Q @ b
-                    _, s, _ = np.linalg.svd(Q.T @ np.eye(row, V.shape[1]))
-                    angles = self._AnglesFromS(np.arccos(s), row)
                     delt_r_orth = delta_r - paral_part
-                    dist = np.linalg.norm(np.arccos(s))
-                    dim = V.shape[1]
-                    self.ort_w = self._GetOrth_w(x+r, self.currentCharDisp, dist, dim)
+                    # _, s, _ = np.linalg.svd(Q.T @ np.eye(row, V.shape[1]))
+                    # angles = self._AnglesFromS(np.arccos(s), row)
+                    # dist = np.linalg.norm(np.arccos(s))
+                    # dim = V.shape[1]
+                    # self.ort_w = self._GetOrth_w(x+r, self.currentCharDisp, dist, dim)
 
-                    # Compute the orthogonal part
-                    deltax_ort = (1 - self.ort_w) * delta_r - (1 - self.ort_w) * paral_part
-                    delta_x += deltax_ort
+                    # # Compute the orthogonal part
+                    # deltax_ort = (1 - self.ort_w) * delta_r - (1 - self.ort_w) * paral_part
+                    # delta_x += deltax_ort
 
 
                 if self.is_in_training_region(current_t):
@@ -338,18 +339,18 @@ class IQNILSMConvergenceAccelerator(CoSimulationConvergenceAccelerator):
                 # Compute the update
                 delta_x = np.dot(W, c) - delta_r
 
-                if self.is_in_prediction_region(current_t) or self.is_in_training_region(current_t):
+                if self.is_in_prediction_region(current_t) or self.is_in_training_region(current_t) and self.surr_J is not None:
                     paral_part = Q @ b
-                    _, s, _ = np.linalg.svd(Q.T @ np.eye(row, V.shape[1]))
-                    angles = self._AnglesFromS(np.arccos(s), row)
                     delt_r_orth = delta_r - paral_part
-                    dist = np.linalg.norm(np.arccos(s))
-                    dim = V.shape[1]
-                    self.ort_w = self._GetOrth_w(x+r, self.currentCharDisp, dist, dim)
+                    # _, s, _ = np.linalg.svd(Q.T @ np.eye(row, V.shape[1]))
+                    # angles = self._AnglesFromS(np.arccos(s), row)
+                    # dist = np.linalg.norm(np.arccos(s))
+                    # dim = V.shape[1]
+                    # self.ort_w = self._GetOrth_w(x+r, self.currentCharDisp, dist, dim)
 
-                    # Compute the orthogonal part
-                    deltax_ort = (1 - self.ort_w) * delta_r - (1 - self.ort_w) * paral_part
-                    delta_x += deltax_ort
+                    # # Compute the orthogonal part
+                    # deltax_ort = (1 - self.ort_w) * delta_r - (1 - self.ort_w) * paral_part
+                    # delta_x += deltax_ort
 
                 if self.is_in_training_region(current_t):
                     self._SaveData(x, delta_x + delta_r -

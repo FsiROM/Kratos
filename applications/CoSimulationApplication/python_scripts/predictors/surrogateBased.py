@@ -10,12 +10,12 @@ from ..convergence_accelerators.mySurrogates import *
 from rom_am.solid_rom import *
 from collections import deque
 
-def Create(settings, solver_wrapper):
+def Create(settings, solver_wrapper, solver_wrapperY):
     cs_tools.SettingsTypeCheck(settings)
-    return SurrogatePredictor(settings, solver_wrapper)
+    return SurrogatePredictor(settings, solver_wrapper, solver_wrapperY)
 
 class SurrogatePredictor(CoSimulationPredictor):
-    def __init__(self, settings, solver_wrapper):
+    def __init__(self, settings, solver_wrapper, solver_wrapperY):
         super().__init__(settings, solver_wrapper)
 
         self.launch_time = self.settings["prediction_launch_time"].GetDouble()
@@ -24,11 +24,16 @@ class SurrogatePredictor(CoSimulationPredictor):
         self.maxIter = self.settings["max_iters"].GetInt()
         self.w0 = self.settings["w0"].GetDouble()
         self.save_log = self.settings["save_log"].GetBool()
+        self.jump_start = self.settings["jump_start"].GetBool()
         fluidSurrofFileName = self.settings["file_nameFluid"].GetString()
         solidROMFileName = self.settings["file_nameSolid"].GetString()
-        self.fluidSurrogate = FluidSurrog()
+        self.re_train_thres = self.settings["re_train_thres"].GetInt()
+        self.extrap_order = self.settings["extrapolation_order"].GetInt()
+        #self.fluidSurrogate = FluidSurrog()
         with open(fluidSurrofFileName, 'rb') as inp:
             self.fluidSurrogate = pickle.load(inp)
+        if self.re_train_thres > 0:
+            self.fluidSurrogate.reTrainThres = self.re_train_thres
         self.solidSurrogate = solid_ROM()
         with open(solidROMFileName, 'rb') as inp:
             self.solidSurrogate = pickle.load(inp)
@@ -45,6 +50,9 @@ class SurrogatePredictor(CoSimulationPredictor):
         self.surrQ = None
         self.surrR = None
         self.deltaX = None
+        self.secondPreviousX = None
+        self.thirdPreviousX = None
+        self.surrJac = None
 
     def ReceiveNewData(self, newDisp, newLoad):
         if self.currentT >= self.launch_time and self.currentT >= self.launch_retrain :
@@ -58,14 +66,31 @@ class SurrogatePredictor(CoSimulationPredictor):
         if self.currentT >= self.launch_time:
             w = self.w0
             current_data  = self.interface_data.GetData(0)
-            initial_data = 2*current_data - self.interface_data.GetData(1)
+            if self.extrap_order > 0:
+                if self.secondPreviousX is not None:
+                    previous_data = self.secondPreviousX.ravel()
+                else:
+                    previous_data = current_data.copy()
+                previous_data_2 = 0.
+                alpha1 = 2.
+                alpha2 = -1.
+                alpha3 = 0.
+
+                if self.extrap_order > 1 and self.thirdPreviousX is not None:
+                    previous_data_2 = self.thirdPreviousX.ravel()
+                    alpha1 = 3.
+                    alpha2 = -3.
+                    alpha3 = 1.
+
+
+                initial_data = alpha1*current_data + alpha2 * previous_data + alpha3 * previous_data_2
+            else:
+                initial_data = current_data.copy()
 
             pred_ = initial_data.copy()
             isConverged = False
             # R = deque( maxlen = 20 )
             # X = deque( maxlen = 20 )
-            # R = []
-            # X = []
             if self.previousX is not None:
                 i = 0
                 while i<self.maxIter and not isConverged:
@@ -82,10 +107,21 @@ class SurrogatePredictor(CoSimulationPredictor):
                         self._local_resid = nrm/pred_norm
                         return
 
+                    # R.appendleft(newResiduals.ravel().copy())
+                    # X.appendleft(pred_.ravel().copy())
+                    # if len(R) > 1:
+                    #     deltaX = np.empty((len(R)-1, len(pred_)))
+                    #     deltaR = np.empty((len(R)-1, len(pred_)))
+                    #     for j in range(len(R)-1):
+                    #         deltaX[j] = X[j] - X[j+1]
+                    #         deltaR[j] = R[j] - R[j+1]
+                    #     deltaX = deltaX.T
+                    #     deltaR = deltaR.T
+
                     if (nrm/pred_norm) < self.rel_tolerance:
                         isConverged = True
-                        self._success = 1
                         self._local_resid = nrm/pred_norm
+                        # self.surrJac = deltaX @ np.linalg.pinv(deltaR, rcond=1e-8)
 
                     if not isConverged:
                         if i > 1:
@@ -97,8 +133,10 @@ class SurrogatePredictor(CoSimulationPredictor):
                     i+=1
 
             if isConverged:
+                self._success = 1
                 self._UpdateData(fluidSol)
             else:
+                self._success = 0
                 return
 
     def qr_filter(self, Q, R, V, W):
@@ -122,6 +160,11 @@ class SurrogatePredictor(CoSimulationPredictor):
         super().FinalizeSolutionStep()
         self.surrJac = None
         self.surrQ = None
+        if self.previousX is not None:
+            if self.extrap_order > 1:
+                if self.secondPreviousX is not None:
+                    self.thirdPreviousX = self.secondPreviousX.copy()
+            self.secondPreviousX = self.previousX.copy()
         self.previousX = self.interface_data.GetData().copy()
         if self.save_log:
             self.local_iters.append(self._local_iter)
@@ -150,7 +193,10 @@ class SurrogatePredictor(CoSimulationPredictor):
             "retraining_launch_time" : 100,
             "file_nameFluid"              : "",
             "file_nameSolid"              : "",
-            "save_log"                    : true
+            "save_log"                    : true,
+            "jump_start"                  : true,
+            "extrapolation_order"         : 1,
+            "re_train_thres"              : -1
         }""")
         this_defaults.AddMissingParameters(super()._GetDefaultParameters())
         return this_defaults

@@ -1,5 +1,5 @@
 from KratosMultiphysics.CoSimulationApplication.factories import base_factory
 
-def CreatePredictor(predictor_settings, solver_wrapper):
+def CreatePredictor(predictor_settings, solver_wrapper, solver_wrapperY=None):
     """This function creates and returns the Predictor used for CoSimulation"""
-    return base_factory.Create(predictor_settings, [solver_wrapper], "KratosMultiphysics.CoSimulationApplication.predictors")
+    return base_factory.Create(predictor_settings, [solver_wrapper, solver_wrapperY], "KratosMultiphysics.CoSimulationApplication.predictors")
