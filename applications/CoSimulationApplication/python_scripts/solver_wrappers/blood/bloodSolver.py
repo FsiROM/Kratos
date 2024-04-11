@@ -27,6 +27,9 @@ class BloodSolver(object):
             raise Exception("The input has to be provided as a dict or a string")
 
 
+        self.mu_0 = parameters["mu"]["mu_0"]
+        self.mu_1 = parameters["mu"]["mu_1"]
+
         self.pressureData = []
         self.velocityData = []
 
@@ -53,7 +56,7 @@ class BloodSolver(object):
         self.ComputeInVelocity()
 
     def ComputeInVelocity(self, ):
-        freq = .9
+        freq = self.mu_0
         # freq = 2.
         pres = 120.
         c = -.002
@@ -77,13 +80,14 @@ class BloodSolver(object):
         self.solInVeloc = solve_ivp(f, [0, ntt*dt], np.array([10., 0]), t_eval=input_t)
 
     def velocity_in(self, t):
+        constant_ = self.mu_1
         if t <= 20.:
             ramp = 1.
         elif t > 20. and t<= 60.:
             ramp = 0.9+0.1 * np.sin(t * np.pi / (40))
         else:
             ramp = 0.8
-        return (self.solInVeloc.y[0][int(t/self.dt)]/60. + 4.)*ramp
+        return (self.solInVeloc.y[0][int(t/self.dt)]/60. + constant_)*ramp
 
     def Initialize(self):
         #solution buffer
@@ -99,8 +103,8 @@ class BloodSolver(object):
     def OutputSolutionStep(self):
         self.pressureData.append(self.pressure.copy().reshape((-1, 1)))
         self.velocityData.append(self.velocity.copy().reshape((-1, 1)))
-        np.save("pressure.npy", np.hstack(self.pressureData))
-        np.save("velocity.npy", np.hstack(self.velocityData))
+        np.save("coSimData/pressure.npy", np.hstack(self.pressureData))
+        np.save("coSimData/velocity.npy", np.hstack(self.velocityData))
 
     def AdvanceInTime(self, current_time):
         self.time = current_time + self.dt
@@ -112,7 +116,7 @@ class BloodSolver(object):
                 self.time), custom_coupling=True, pres=0., law = 'strs-strain', bC='non-reflecting')
 
         self.yData.append(self.pressure.reshape((-1, 1)))
-        np.save("fluidPres.npy", np.hstack(self.yData))
+        np.save("coSimData/fluidPres.npy", np.hstack(self.yData))
 
     def FinalizeSolutionStep(self):
         self.velocity_old = self.velocity.copy()

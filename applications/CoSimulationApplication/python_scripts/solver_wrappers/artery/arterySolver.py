@@ -29,6 +29,9 @@ class ArterySolver(object):
             raise Exception(
                 "The input has to be provided as a dict or a string")
 
+        self.solidROM_file_name = parameters["ROM"]["file_name"]
+        self.launch_time_ROM = parameters["ROM"]["launch_time"]
+
         self.r0 = 1 / np.sqrt(np.pi)  # radius of the tube
         self.a0 = self.r0**2 * np.pi  # cross sectional area
         # timestep size, set it to a large value to enforce tau from precice_config.xml
@@ -89,7 +92,7 @@ class ArterySolver(object):
 
     def OutputSolutionStep(self):
         self.sectionData.append(self.Section.copy().reshape((-1, 1)))
-        np.save("section.npy", np.hstack(self.sectionData))
+        np.save("coSimData/section.npy", np.hstack(self.sectionData))
 
     def AdvanceInTime(self, current_time):
         self.time = current_time + self.dt
@@ -97,7 +100,7 @@ class ArterySolver(object):
 
     def SolveSolutionStep(self):
         self.xData.append(self.pressure.reshape((-1, 1)))
-        if self.time <= 5000.0:
+        if self.time <= self.launch_time_ROM:
             self.Section = self.solid_fom(self.pressure)
 
         else:
@@ -105,20 +108,17 @@ class ArterySolver(object):
                 # self.sol_rom.train(np.hstack(self.xData), np.hstack(self.yData), rank_disp=25, rank_pres=25,
                 #                    regression_model="RBF", dispReduc_model="POD", norm_regr=[False, True],
                 #                    norm=["minmax", "minmax"])
-                # with open('./rom_good_data/accelTestGlobal.pkl', 'rb') as inp:
-                with open('./rom_good_data/strongerROM.pkl', 'rb') as inp:
+                with open(self.solidROM_file_name, 'rb') as inp:
                     self.sol_rom = pickle.load(inp)
                 self.trainedROM = True
-                # with open('accelTestGlobal.pkl', 'wb') as outp:
-                #     pickle.dump(self.sol_rom, outp, pickle.HIGHEST_PROTOCOL)
 
             print("--- ROM prediction Regime ---")
             self.Section = self.sol_rom.pred(self.pressure.reshape((-1, 1))).ravel()
         # self.Section = self.solid_fom(self.pressure)
 
         self.yData.append(self.Section.reshape((-1, 1)))
-        np.save("solidPres.npy", np.hstack(self.xData))
-        np.save("solidSect.npy", np.hstack(self.yData))
+        np.save("coSimData/solidPres.npy", np.hstack(self.xData))
+        np.save("coSimData/solidSect.npy", np.hstack(self.yData))
 
     def FinalizeSolutionStep(self):
         self.Section = self.solid_fom(self.pressure) # Finalizing with converged pressure

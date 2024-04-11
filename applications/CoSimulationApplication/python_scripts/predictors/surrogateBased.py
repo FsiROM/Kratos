@@ -6,7 +6,6 @@ from KratosMultiphysics.CoSimulationApplication.base_classes.co_simulation_predi
 import KratosMultiphysics.CoSimulationApplication.co_simulation_tools as cs_tools
 import numpy as np
 import pickle
-from ..convergence_accelerators.mySurrogates import *
 from rom_am.solid_rom import *
 from collections import deque
 
