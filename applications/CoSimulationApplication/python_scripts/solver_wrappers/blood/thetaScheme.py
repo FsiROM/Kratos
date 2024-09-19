@@ -16,7 +16,7 @@ def perform_partitioned_theta_scheme_step(velocity0, pressure0, crossSection0, c
     if law == 'strs-strain':
         currentR = np.sqrt(crossSection1[-1]/np.pi)
         currentEps = (currentR - r0) /r0
-        if currentEps > 0.02 or currentEps  -0.02:
+        if True or ( currentEps > 0.002 or currentEps < -0.002 ): # Approximation of non-reflecting BC (smaller wave speed)
             Ex = (30-25)/(.004 -.002)
         else:
             Ex =  25/.002

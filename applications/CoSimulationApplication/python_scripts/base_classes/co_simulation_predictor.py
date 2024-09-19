@@ -16,6 +16,7 @@ class CoSimulationPredictor:
         self.interface_data = solver_wrapper.GetInterfaceData(self.settings["data_name"].GetString())
 
         self.echo_level = self.settings["echo_level"].GetInt()
+        self.receives_data = False
 
         # TODO check buffer size
         self._GetMinimumBufferSize()

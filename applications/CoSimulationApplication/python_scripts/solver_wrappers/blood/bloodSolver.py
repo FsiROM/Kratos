@@ -29,6 +29,8 @@ class BloodSolver(object):
 
         self.mu_0 = parameters["mu"]["mu_0"]
         self.mu_1 = parameters["mu"]["mu_1"]
+        self.law = parameters["law"]
+        self.bC = parameters["bC"]
 
         self.pressureData = []
         self.velocityData = []
@@ -40,8 +42,6 @@ class BloodSolver(object):
         self.kappa = 100
         self.rho = 1
         self.p0 = 0.
-        self.E = 10000  # elasticity module
-        self.c_mk = np.sqrt(self.E / 2 / self.r0)  # wave speed
         self.L = 10  # length of tube/simulation domain
         self.N = 100
         self.dx = self.L / self.kappa
@@ -113,7 +113,7 @@ class BloodSolver(object):
     def SolveSolutionStep(self):
         self.velocity, self.pressure, success = perform_partitioned_implicit_euler_step(
             self.velocity_old, self.pressure_old, self.Section_old, self.Section, self.dx, self.dt, self.velocity_in(
-                self.time), custom_coupling=True, pres=0., law = 'strs-strain', bC='non-reflecting')
+                self.time), custom_coupling=True, pres=0., law = self.law, bC=self.bC)
 
         self.yData.append(self.pressure.reshape((-1, 1)))
         np.save("coSimData/fluidPres.npy", np.hstack(self.yData))

@@ -6,12 +6,12 @@ import KratosMultiphysics as KM
 import KratosMultiphysics.CoSimulationApplication.co_simulation_tools as cs_tools
 import numpy as np
 
-def Create(settings, solver_wrapper, solY):
+def Create(settings, solver_wrapper):
     cs_tools.SettingsTypeCheck(settings)
-    return LinearPredictor(settings, solver_wrapper, solY)
+    return LinearPredictor(settings, solver_wrapper)
 
 class LinearPredictor(CoSimulationPredictor):
-    def __init__(self, settings, solver_wrapper, solY):
+    def __init__(self, settings, solver_wrapper):
         super().__init__(settings, solver_wrapper)
 
         self.launch_time = self.settings["prediction_launch_time"].GetDouble()

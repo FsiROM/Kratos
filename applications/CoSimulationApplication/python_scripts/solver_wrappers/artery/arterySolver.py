@@ -31,6 +31,11 @@ class ArterySolver(object):
 
         self.solidROM_file_name = parameters["ROM"]["file_name"]
         self.launch_time_ROM = parameters["ROM"]["launch_time"]
+        self.law = parameters["law"]
+        self.E = parameters["E"] # Young modulus (quadratic law)
+        self.E1 = parameters["E1"] # Young modulus (center)
+        self.alpha = parameters["alpha"] # factor alpha where E/alpha is the outer Young modulus
+        self.eps0 = parameters["eps0"] # limit of first region
 
         self.r0 = 1 / np.sqrt(np.pi)  # radius of the tube
         self.a0 = self.r0**2 * np.pi  # cross sectional area
@@ -39,9 +44,8 @@ class ArterySolver(object):
         self.N = 100  # number of elements in x direction
         self.p0 = 0  # pressure at outlet
         self.L = 10  # length of tube/simulation domain
-        self.dt = .1
+        self.dt = parameters["dt"]
 
-        self.E = 10000  # elasticity module
         self.c_mk = np.sqrt(self.E / 2 / self.r0)  # wave speed
 
         self.rom_use = False
@@ -66,20 +70,27 @@ class ArterySolver(object):
     def strs(self, eps):
         res = np.empty_like(eps)
 
-        res[(eps < .002)+(eps > -.002)] = 25/.002 * \
-            eps[(eps < .002)+(eps > -.002)]
-        a = (30-25)/(.004-.002)
-        b = 30 - a*.004
-        res[eps > .002] = a*eps[eps > .002]+b
-        b = -30 + a * .004
-        res[eps < -.002] = a*eps[eps < -.002]+b
+        res[(eps < self.eps0)+(eps > -self.eps0)] = self.E1 * \
+            eps[(eps < self.eps0)+(eps > -self.eps0)]
+        a = self.E1/self.alpha
+        b = (self.E1 - a) * self.eps0
+        res[eps > self.eps0] = a*eps[eps > self.eps0]+b
+        b = (a - self.E1) * self.eps0
+        res[eps < -self.eps0] = a*eps[eps < -self.eps0]+b
 
         return res
 
     def solid_fom(self, pressure):
-        def fun(x): return ((pressure*x)) - self.strs((x-self.r0)/self.r0)
-        res = root(fun, self.Section, tol = 5e-12)
-        return np.pi * res.x**2
+        if self.law == "strs-strain":
+            def fun(x): return ((pressure*x)) - self.strs((x-self.r0)/self.r0)
+            res = root(fun, self.Section, tol = 5e-12)
+            a =  np.pi * res.x**2
+
+        if self.law == "quad":
+            r0 = 1 / np.sqrt(np.pi)
+            a0 = np.pi * r0**2
+            a = a0 * ((2*self.c_mk**2)/(pressure - 2*self.c_mk**2))**2
+        return a
 
     def Initialize(self):
         # solution buffer
@@ -105,16 +116,12 @@ class ArterySolver(object):
 
         else:
             if not self.trainedROM:
-                # self.sol_rom.train(np.hstack(self.xData), np.hstack(self.yData), rank_disp=25, rank_pres=25,
-                #                    regression_model="RBF", dispReduc_model="POD", norm_regr=[False, True],
-                #                    norm=["minmax", "minmax"])
                 with open(self.solidROM_file_name, 'rb') as inp:
                     self.sol_rom = pickle.load(inp)
                 self.trainedROM = True
 
             print("--- ROM prediction Regime ---")
             self.Section = self.sol_rom.pred(self.pressure.reshape((-1, 1))).ravel()
-        # self.Section = self.solid_fom(self.pressure)
 
         self.yData.append(self.Section.reshape((-1, 1)))
         np.save("coSimData/solidPres.npy", np.hstack(self.xData))

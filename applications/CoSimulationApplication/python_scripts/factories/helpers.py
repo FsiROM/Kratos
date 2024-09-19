@@ -24,9 +24,8 @@ def CreatePredictors(predictor_settings_list, solvers, parent_echo_level):
     predictors = []
     for predictor_settings in predictor_settings_list.values():
         solver = solvers[predictor_settings["solver"].GetString()]
-        solverY = solvers[predictor_settings["solverY"].GetString()]
         AddEchoLevelToSettings(predictor_settings, parent_echo_level)
-        predictors.append(CreatePredictor(predictor_settings, solver, solverY))
+        predictors.append(CreatePredictor(predictor_settings, solver))
     return predictors
 
 def CreateConvergenceAccelerators(convergence_accelerator_settings_list: KM.Parameters,
