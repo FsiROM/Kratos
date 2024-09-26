@@ -159,7 +159,7 @@ class IQNILSConvergenceAccelerator(CoSimulationConvergenceAccelerator):
         self.V_new = []
         self.W_new = []
 
-    def ReceiveJacobian(self, J, Q):
+    def ReceiveJacobian(self, J):
         pass
 
     def ReceivePredictedSol(self, newX):
