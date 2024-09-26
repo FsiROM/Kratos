@@ -9,7 +9,7 @@ import numpy as np
 import pickle
 from rom_am.solid_rom import *
 from rom_am.fluid_surrogate import *
-from rom_am.fluidRecusrsiveROM import *
+#from rom_am.fluidRecusrsiveROM import *
 # ... See (1) ...
 # from collections import deque
 
