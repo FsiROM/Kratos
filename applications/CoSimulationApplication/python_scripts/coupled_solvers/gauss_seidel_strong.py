@@ -183,7 +183,7 @@ class GaussSeidelStrongCoupledSolver(CoSimulationCoupledSolver):
                     predictor.ReceiveNewData(self.solver_wrappers[self.accelerated_input_solver].GetInterfaceData(self.raw_data).GetData().reshape((-1, 1)),
                                             self.solver_wrappers[self.raw_input_solver].GetInterfaceData(self.accelerated_data).GetData().reshape((-1, 1)))
 
-        if self.save_tr_data and self.is_in_saving_mode():
+        if self.save_tr_data and self.is_in_saving_mode() and solver_name == self.raw_input_solver:
             self.load_data.append(self.solver_wrappers[self.raw_input_solver].GetInterfaceData(self.accelerated_data).GetData().reshape((-1, 1)))
             np.save("./coSimData/out"+self.raw_input_solver+"_"+self.accelerated_data+"_data.npy",
                     np.asarray(self.load_data)[:, :, 0].T)
