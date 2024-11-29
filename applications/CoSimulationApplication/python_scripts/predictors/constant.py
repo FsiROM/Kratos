@@ -8,9 +8,9 @@ import numpy as np
 
 def Create(settings, solver_wrapper, solY):
     cs_tools.SettingsTypeCheck(settings)
-    return LinearPredictor(settings, solver_wrapper, solY)
+    return ConstantPredictor(settings, solver_wrapper, solY)
 
-class LinearPredictor(CoSimulationPredictor):
+class ConstantPredictor(CoSimulationPredictor):
     def __init__(self, settings, solver_wrapper, solY):
         super().__init__(settings, solver_wrapper)
 
@@ -33,21 +33,12 @@ class LinearPredictor(CoSimulationPredictor):
 
             if not self.interface_data.IsDefinedOnThisRank(): return
 
-            current_data  = self.interface_data.GetData(0)
-            #previous_data  = self.interface_data.GetData(1)
-            if self.secondPreviousX is not None:
-                previous_data = self.secondPreviousX.ravel()
-            else:
-                previous_data = current_data.copy()
-
-            predicted_data = 2*current_data - previous_data
-
-            self._UpdateData(predicted_data)
+            if self.previousX is not None:
+                current_data = self.previousX
+                self._UpdateData(current_data)
 
     def FinalizeSolutionStep(self):
         super().FinalizeSolutionStep()
-        if self.previousX is not None:
-            self.secondPreviousX = self.previousX.copy()
         self.previousX = self.interface_data.GetData().copy()
 
     @classmethod

@@ -20,7 +20,6 @@ def Create(settings, models, solver_name):
 class GaussSeidelStrongCoupledSolver(CoSimulationCoupledSolver):
     def __init__(self, settings, models, solver_name):
         super().__init__(settings, models, solver_name)
-        self.load_data = deque()
 
         self.num_coupling_iterations = self.settings["num_coupling_iterations"].GetInt()
 
@@ -42,8 +41,46 @@ class GaussSeidelStrongCoupledSolver(CoSimulationCoupledSolver):
 
         self.accelerated_input_solver = list(self.solver_wrappers.keys())[0]
         self.raw_input_solver = list(self.solver_wrappers.keys())[-1]
-        self.accelerated_data = self.coupling_sequence[self.accelerated_input_solver]["input_data_list"][0]["data"].GetString()
-        self.raw_data = self.coupling_sequence[self.accelerated_input_solver]["output_data_list"][0]["data"].GetString()
+
+        if self.coupling_sequence[self.accelerated_input_solver]["input_data_list"].size()>0:
+            self.accelerated_data = self.coupling_sequence[self.accelerated_input_solver]["input_data_list"][0]["data"].GetString()
+            self.raw_data = self.coupling_sequence[self.accelerated_input_solver]["output_data_list"][0]["data"].GetString()
+        else:
+            self.accelerated_data = self.coupling_sequence[self.raw_input_solver]["output_data_list"][0]["data"].GetString()
+            self.raw_data = self.coupling_sequence[self.raw_input_solver]["input_data_list"][0]["data"].GetString()
+
+        self.raw_data_vel = None
+        if self.coupling_sequence[self.accelerated_input_solver]["output_data_list"].size()>1:
+            self.raw_data_vel = self.coupling_sequence[self.accelerated_input_solver]["output_data_list"][1]["data"].GetString()
+
+        self.data_0 = {}
+        self.data_0[self.accelerated_input_solver] = []
+        self.data_0[self.raw_input_solver] = []
+        self.data_1 = {}
+        self.data_1[self.accelerated_input_solver] = []
+        self.data_1[self.raw_input_solver] = []
+        self.data_2 = {}
+        self.data_2[self.accelerated_input_solver] = []
+        self.data_2[self.raw_input_solver] = []
+        self.data_3 = {}
+        self.data_3[self.accelerated_input_solver] = []
+        self.data_3[self.raw_input_solver] = []
+        for _ in range(self.coupling_sequence[self.accelerated_input_solver]["input_data_list"].size()):
+            self.data_0[self.accelerated_input_solver].append(deque())
+            self.data_1[self.accelerated_input_solver].append(deque())
+
+        for _ in range(self.coupling_sequence[self.accelerated_input_solver]["output_data_list"].size()):
+            self.data_2[self.accelerated_input_solver].append(deque())
+            self.data_3[self.accelerated_input_solver].append(deque())
+
+        for _ in range(self.coupling_sequence[self.raw_input_solver]["input_data_list"].size()):
+            self.data_0[self.raw_input_solver].append(deque())
+            self.data_1[self.raw_input_solver].append(deque())
+
+        for _ in range(self.coupling_sequence[self.raw_input_solver]["output_data_list"].size()):
+            self.data_2[self.raw_input_solver].append(deque())
+            self.data_3[self.raw_input_solver].append(deque())
+
 
         self.convergence_accelerators_list = factories_helper.CreateConvergenceAccelerators(
             self.settings["convergence_accelerators"],
@@ -151,6 +188,15 @@ class GaussSeidelStrongCoupledSolver(CoSimulationCoupledSolver):
             for conv_acc in self.convergence_accelerators_list:
                 conv_acc.ComputeAndApplyUpdate()
 
+            for predictor in self.predictors_list:
+                if predictor.receives_data and predictor.takes_accelerated:
+                    input_ = self.solver_wrappers[self.accelerated_input_solver].GetInterfaceData(self.raw_data).GetData().reshape((-1, 1))
+                    if self.raw_data_vel is not None:
+                        input_ = np.vstack((input_, self.solver_wrappers[self.accelerated_input_solver].GetInterfaceData(self.raw_data_vel).GetData().reshape((-1, 1))))
+                    predictor.ReceiveNewData(input_,
+                                        self.solver_wrappers[self.raw_input_solver].GetInterfaceData(self.accelerated_data).GetData().reshape((-1, 1)))
+
+
     def _SaveTimes(self, solver_name, t):
         self.solvers_times[solver_name].append(t)
         with open("./coSimData/"+solver_name+"_time.npy", 'wb') as f:
@@ -176,20 +222,81 @@ class GaussSeidelStrongCoupledSolver(CoSimulationCoupledSolver):
             conv_crit.Check()
 
     def _SynchronizeOutputData(self, solver_name):
+
+        data_list = self.coupling_sequence[solver_name]["output_data_list"]
+        for i in range(data_list.size()):
+            i_data = data_list[i]
+            if i_data["save_before"].size()>0:
+                data_tosave = i_data["save_before"][0].GetString()
+                solver_tosave_from = i_data["save_before"][1].GetString()
+                self._SaveOnlineData(data_tosave, solver_tosave_from, self.data_2[solver_name][i], "from_"+solver_name)
+
         super()._SynchronizeOutputData(solver_name)
+
+        for i in range(data_list.size()):
+            i_data = data_list[i]
+            if i_data["save_after"].size()>0:
+                data_tosave = i_data["save_after"][0].GetString()
+                solver_tosave_from = i_data["save_after"][1].GetString()
+                self._SaveOnlineData(data_tosave, solver_tosave_from, self.data_3[solver_name][i], "from_"+solver_name)
+
         if solver_name == self.raw_input_solver:
             for predictor in self.predictors_list:
-                if predictor.receives_data:
-                    predictor.ReceiveNewData(self.solver_wrappers[self.accelerated_input_solver].GetInterfaceData(self.raw_data).GetData().reshape((-1, 1)),
+                if predictor.receives_data and (not predictor.takes_accelerated):
+                    if self.process_info[KratosCoSim.COUPLING_ITERATION_NUMBER] > 1:
+                        input_ = self.solver_wrappers[self.accelerated_input_solver].GetInterfaceData(self.raw_data).GetData().reshape((-1, 1))
+                        if self.raw_data_vel is not None:
+                            input_ = np.vstack((input_, self.solver_wrappers[self.accelerated_input_solver].GetInterfaceData(self.raw_data_vel).GetData().reshape((-1, 1))))
+                        predictor.ReceiveNewData(input_,
                                             self.solver_wrappers[self.raw_input_solver].GetInterfaceData(self.accelerated_data).GetData().reshape((-1, 1)))
 
-        if self.save_tr_data and self.is_in_saving_mode():
+        if solver_name == self.accelerated_input_solver:
+            for predictor in self.predictors_list:
+                if predictor.receives_data and (not predictor.takes_accelerated):
+                    if self.process_info[KratosCoSim.COUPLING_ITERATION_NUMBER] > 1:
+                        input_ = self.solver_wrappers[self.raw_input_solver].GetInterfaceData(self.accelerated_data).GetData().reshape((-1, 1))
+                        output_ = self.solver_wrappers[self.accelerated_input_solver].GetInterfaceData(self.raw_data).GetData().reshape((-1, 1))
+                        if self.raw_data_vel is not None:
+                            output_ = np.vstack((output_, self.solver_wrappers[self.accelerated_input_solver].GetInterfaceData(self.raw_data_vel).GetData().reshape((-1, 1))))
+                        predictor.ReceiveNewDataS(input_, output_)
+
+        """
+        if solver_name == self.raw_input_solver and self.save_tr_data and self.is_in_saving_mode():
             self.load_data.append(self.solver_wrappers[self.raw_input_solver].GetInterfaceData(self.accelerated_data).GetData().reshape((-1, 1)))
             np.save("./coSimData/out"+self.raw_input_solver+"_"+self.accelerated_data+"_data.npy",
                     np.asarray(self.load_data)[:, :, 0].T)
+        """
 
     def _SynchronizeInputData(self, solver_name):
+        
+        """
+        if solver_name == self.accelerated_input_solver:
+            self.updated_load_data.append(self.solver_wrappers[self.raw_input_solver].GetInterfaceData(self.accelerated_data).GetData().reshape((-1, 1)))
+            np.save("./coSimData/updated"+self.raw_input_solver+"_"+self.accelerated_data+"_data.npy",
+                    np.asarray(self.updated_load_data)[:, :, 0].T)
+        """
+        data_list = self.coupling_sequence[solver_name]["input_data_list"]
+        for i in range(data_list.size()):
+            i_data = data_list[i]
+            if i_data["save_before"].size()>0:
+                data_tosave = i_data["save_before"][0].GetString()
+                solver_tosave_from = i_data["save_before"][1].GetString()
+                self._SaveOnlineData(data_tosave, solver_tosave_from, self.data_0[solver_name][i], "to_"+solver_name)
+
         super()._SynchronizeInputData(solver_name)
+
+        for i in range(data_list.size()):
+            i_data = data_list[i]
+            if i_data["save_after"].size()>0:
+                data_tosave = i_data["save_after"][0].GetString()
+                solver_tosave_from = i_data["save_after"][1].GetString()
+                self._SaveOnlineData(data_tosave, solver_tosave_from, self.data_1[solver_name][i], "to_"+solver_name)
+
+
+    def _SaveOnlineData(self, data_name, solver_name, array, suff):
+        array.append(self.solver_wrappers[solver_name].GetInterfaceData(data_name).GetData().reshape((-1, 1)))
+        np.save("./coSimData/"+solver_name+"_"+data_name+"_data_"+suff+".npy",
+                np.asarray(array)[:, :, 0].T)
 
     @classmethod
     def _GetDefaultParameters(cls):

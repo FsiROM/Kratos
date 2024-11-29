@@ -365,8 +365,8 @@ class StructuralROMWrapper(structural_mechanics_wrapper.StructuralMechanicsWrapp
     def Initialize(self):
         super().Initialize()
         self._dimension = self.ModelPart.ProcessInfo[KM.DOMAIN_SIZE]
-        #np.save("./coSimData/coords_interf.npy",
-        #        np.asarray(self.GetInterfaceData(self.output_data_name).model_part.GetNodes())[:, :self._dimension])
+        np.save("./coSimData/coords_interf.npy",
+                np.asarray(self.GetInterfaceData(self.output_data_name).model_part.GetNodes())[:, :self._dimension])
 
         self.SS = self.ModelPart.GetCommunicator().GetDataCommunicator().Sum(self.ModelPart.NumberOfNodes() * self._dimension, 0)
         self.SCH = self._analysis_stage._GetSolver()._GetScheme()

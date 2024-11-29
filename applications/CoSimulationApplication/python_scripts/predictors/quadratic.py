@@ -6,15 +6,16 @@ import KratosMultiphysics as KM
 import KratosMultiphysics.CoSimulationApplication.co_simulation_tools as cs_tools
 import numpy as np
 
-def Create(settings, solver_wrapper):
+def Create(settings, solver_wrapper, solY):
     cs_tools.SettingsTypeCheck(settings)
-    return QuadraticPredictor(settings, solver_wrapper)
+    return QuadraticPredictor(settings, solver_wrapper, solY)
 
 class QuadraticPredictor(CoSimulationPredictor):
-    def __init__(self, settings, solver_wrapper):
+    def __init__(self, settings, solver_wrapper, solY):
         super().__init__(settings, solver_wrapper)
 
         self.launch_time = self.settings["prediction_launch_time"].GetDouble()
+        self.end_time = self.settings["prediction_end_time"].GetDouble()
         self.previousX = None
         self.secondPreviousX = None
         self.thirdPreviousX = None
@@ -30,7 +31,7 @@ class QuadraticPredictor(CoSimulationPredictor):
         pass
 
     def Predict(self):
-        if self.currentT >= self.launch_time:
+        if self.currentT >= self.launch_time and self.currentT < self.end_time:
 
             if not self.interface_data.IsDefinedOnThisRank(): return
 
@@ -56,7 +57,8 @@ class QuadraticPredictor(CoSimulationPredictor):
     @classmethod
     def _GetDefaultParameters(cls):
         this_defaults = KM.Parameters("""{
-            "prediction_launch_time" : 0.0
+            "prediction_launch_time" : 0.0,
+            "prediction_end_time" : 100.0
         }""")
         this_defaults.AddMissingParameters(super()._GetDefaultParameters())
         return this_defaults
