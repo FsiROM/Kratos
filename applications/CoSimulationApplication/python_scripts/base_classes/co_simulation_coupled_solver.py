@@ -171,12 +171,12 @@ class CoSimulationCoupledSolver(CoSimulationSolverWrapper):
         return self.time
 
     def Predict(self):
+        for solver in self.solver_wrappers.values():
+            solver.Predict()
+
         for predictor in self.predictors_list:
             predictor.ReceiveTime(self.process_info[KM.TIME])
             predictor.Predict()
-
-        for solver in self.solver_wrappers.values():
-            solver.Predict()
 
         for predictor in self.predictors_list:
             for convAcc in self.convergence_accelerators_list:
@@ -434,7 +434,9 @@ def GetInputDataDefaults():
         "data_transfer_operator_options"  : [],
         "before_data_transfer_operations" : [],
         "after_data_transfer_operations"  : [],
-        "interval"                        : [0.0, 1e30]
+        "interval"                        : [0.0, 1e30],
+        "save_before"                     : [],
+        "save_after"                      : []
     }""")
 
 def GetOutputDataDefaults():
@@ -446,7 +448,9 @@ def GetOutputDataDefaults():
         "data_transfer_operator_options"  : [],
         "before_data_transfer_operations" : [],
         "after_data_transfer_operations"  : [],
-        "interval"                        : [0.0, 1e30]
+        "interval"                        : [0.0, 1e30],
+        "save_before"                     : [],
+        "save_after"                      : []
     }""")
 
 

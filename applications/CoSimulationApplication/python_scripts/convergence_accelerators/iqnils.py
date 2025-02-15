@@ -36,6 +36,7 @@ class IQNILSConvergenceAccelerator(CoSimulationConvergenceAccelerator):
         iteration_horizon = self.settings["iteration_horizon"].GetInt()
         timestep_horizon = self.settings["timestep_horizon"].GetInt()
         self.alpha = self.settings["alpha"].GetDouble()
+        self.epsilon = self.settings["epsilon"].GetDouble()
 
         self.R = deque( maxlen = iteration_horizon )
         self.X = deque( maxlen = iteration_horizon )
@@ -88,7 +89,7 @@ class IQNILSConvergenceAccelerator(CoSimulationConvergenceAccelerator):
 
                 ## Solve least-squares problem
                 delta_r = -self.R[0]
-                c = np.linalg.lstsq(V, delta_r, rcond=-1)[0]
+                c = np.linalg.lstsq(V, delta_r, rcond=self.epsilon)[0]
 
                 ## Compute the update
                 delta_x = np.dot(W, c) - delta_r
@@ -103,7 +104,7 @@ class IQNILSConvergenceAccelerator(CoSimulationConvergenceAccelerator):
                 W = self.W_old
                 ## Solve least-squares problem
                 delta_r = -self.R[0]
-                c = np.linalg.lstsq(V, delta_r, rcond = -1)[0]
+                c = np.linalg.lstsq(V, delta_r, rcond = self.epsilon)[0]
                 ## Compute the update
                 delta_x = np.dot(W, c) - delta_r
                 return delta_x
@@ -132,7 +133,7 @@ class IQNILSConvergenceAccelerator(CoSimulationConvergenceAccelerator):
 
                 ## Solve least-squares problem
                 delta_r = -self.R[0]
-                c = np.linalg.lstsq(V, delta_r, rcond=-1)[0]
+                c = np.linalg.lstsq(V, delta_r, rcond=self.epsilon)[0]
                 ## Compute the update
                 delta_x = np.dot(W, c) - delta_r
 
@@ -173,6 +174,7 @@ class IQNILSConvergenceAccelerator(CoSimulationConvergenceAccelerator):
         this_defaults = KM.Parameters("""{
             "iteration_horizon" : 20,
             "timestep_horizon"  : 1,
+            "epsilon" : 1e-8,
             "alpha"             : 0.125
         }""")
         this_defaults.AddMissingParameters(super()._GetDefaultParameters())

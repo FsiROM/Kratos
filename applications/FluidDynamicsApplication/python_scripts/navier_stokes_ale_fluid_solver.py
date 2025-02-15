@@ -38,8 +38,10 @@ class NavierStokesAleFluidSolver(AleFluidSolver):
         # 1. Ensure that the MESH_VELOCITY is computed
         if mesh_motion_solver_settings.Has("calculate_mesh_velocity"):
             if not mesh_motion_solver_settings["calculate_mesh_velocity"].GetBool():
-                mesh_motion_solver_settings["calculate_mesh_velocity"].SetBool(True)
-                KM.Logger.PrintWarning(cls.__name__, 'Mesh velocity calculation was deactivated. Switching "calculate_mesh_velocity" on')
+                pass
+                # TO DO : if velocity passed from the fluid it is applied on the interface, then in the interior it is calculated
+                #mesh_motion_solver_settings["calculate_mesh_velocity"].SetBool(True)
+                #KM.Logger.PrintWarning(cls.__name__, 'Mesh velocity calculation was deactivated. Switching "calculate_mesh_velocity" on')
         else:
             mesh_motion_solver_settings.AddEmptyValue("calculate_mesh_velocity").SetBool(True)
 
