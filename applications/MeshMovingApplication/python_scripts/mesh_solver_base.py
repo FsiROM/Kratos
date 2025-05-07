@@ -4,7 +4,7 @@ import KratosMultiphysics.MeshMovingApplication as KMM
 
 # Other imports
 from KratosMultiphysics.python_solver import PythonSolver
-
+import numpy as np
 
 class MeshSolverBase(PythonSolver):
     """The base class for mesh motion solvers.
@@ -172,6 +172,10 @@ class MeshSolverBase(PythonSolver):
         return buffer_size
 
     def MoveMesh(self):
+        # haa = np.array(KratosMultiphysics.VariableUtils().GetSolutionStepValuesVector(
+        #                 self.mesh_model_part.GetSubModelPart("FluidNoSlipInterface2D_FluidInterface").Nodes,
+        #                 KratosMultiphysics.MESH_VELOCITY, 0, 2)).reshape((-1, 1)).copy()
+
         # move local and ghost nodes
         self.mesh_model_part.GetCommunicator().SynchronizeVariable(KratosMultiphysics.MESH_DISPLACEMENT)
         KMM.MoveMesh(self.mesh_model_part.Nodes)
@@ -179,6 +183,11 @@ class MeshSolverBase(PythonSolver):
         # If required, calculate the MESH_VELOCITY.
         if self.settings["calculate_mesh_velocity"].GetBool():
             KMM.CalculateMeshVelocities(self.mesh_model_part, self.time_int_helper)
+
+        if False:
+            KratosMultiphysics.VariableUtils().SetSolutionStepValuesVector(
+                self.mesh_model_part.GetSubModelPart("FluidNoSlipInterface2D_FluidInterface").Nodes,
+                                                                    KratosMultiphysics.MESH_VELOCITY, 1.*haa.ravel(), 0)
 
     def ImportModelPart(self):
         # we can use the default implementation in the base class

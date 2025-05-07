@@ -60,6 +60,7 @@ class CoSimulationAnalysis(AnalysisStage):
 
     def Initialize(self):
         self.solver_time = []
+        self.solver_CPUtime = []
         self._GetSolver().Initialize()
         self._GetSolver().Check()
 
@@ -82,6 +83,7 @@ class CoSimulationAnalysis(AnalysisStage):
             np.save(f, np.array([t1 - self.tstart]))
 
     def InitializeSolutionStep(self):
+        self.t0_CPU = time.process_time()
         self.t0 = time.time()
         self.step += 1
         cs_tools.cs_print_info(colors.bold("\ntime={0:.12g}".format(self.time)+ " | step="+ str(self.step)))
@@ -90,10 +92,14 @@ class CoSimulationAnalysis(AnalysisStage):
 
     def FinalizeSolutionStep(self):
         self._GetSolver().FinalizeSolutionStep()
+        t1_cpu = time.process_time()
         t1 = time.time()
         self.solver_time.append(t1 - self.t0)
         with open("./coSimData/increment_time.npy", 'wb') as f:
             np.save(f, np.array(self.solver_time))
+        self.solver_CPUtime.append(t1_cpu - self.t0_CPU)
+        with open("./coSimData/increment_CPUtime.npy", 'wb') as f:
+            np.save(f, np.array(self.solver_CPUtime))
 
     def OutputSolutionStep(self):
         self._GetSolver().OutputSolutionStep()

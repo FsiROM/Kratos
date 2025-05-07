@@ -40,6 +40,13 @@ class AitkenConvergenceAccelerator(CoSimulationConvergenceAccelerator):
     def InitializeSolutionStep(self):
         self.initial_iteration = True
 
+    def FinalizeNonLinearIteration(self, current_t, currentCharDisp):
+        return super().FinalizeNonLinearIteration()
+
+
+    def ReceiveJacobian(self, J):
+        pass
+
     ## UpdateSolution(r, x)
     # @param r residual r_k
     # @param x solution x_k

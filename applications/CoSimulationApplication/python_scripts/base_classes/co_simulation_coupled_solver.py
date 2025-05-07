@@ -13,6 +13,8 @@ from KratosMultiphysics.CoSimulationApplication.coupling_interface_data import B
 
 # Other imports
 from collections import OrderedDict
+import time
+import numpy as np
 
 class UndefinedSolver:
     def __init__(self, name, settings):
@@ -98,6 +100,8 @@ class CoSimulationCoupledSolver(CoSimulationSolverWrapper):
             solver.CreateIO(self.echo_level)
             # using the echo_level of the coupled solver, since IO is needed by the coupling
 
+        self.predictorTime = []
+
     def _GetSolver(self, solver_name):
         solver_name, *sub_solver_names = solver_name.split(".")
         solver = self.solver_wrappers[solver_name]
@@ -171,12 +175,19 @@ class CoSimulationCoupledSolver(CoSimulationSolverWrapper):
         return self.time
 
     def Predict(self):
+        t0 = time.time()
+
         for solver in self.solver_wrappers.values():
             solver.Predict()
 
         for predictor in self.predictors_list:
             predictor.ReceiveTime(self.process_info[KM.TIME])
             predictor.Predict()
+
+        t1 = time.time()
+        self.predictorTime.append(t1 - t0)
+        with open("./coSimData/predictor_time.npy", 'wb') as f:
+            np.save(f, np.array(self.predictorTime))
 
         for predictor in self.predictors_list:
             for convAcc in self.convergence_accelerators_list:

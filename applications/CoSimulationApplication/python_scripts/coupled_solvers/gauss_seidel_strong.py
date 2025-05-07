@@ -26,6 +26,7 @@ class GaussSeidelStrongCoupledSolver(CoSimulationCoupledSolver):
         # =========== Saving data ===========
         os.makedirs(os.path.dirname("./coSimData/"), exist_ok=True)
         self.iterations_table = []
+        self.acceleratorTime = []
         self.solvers_times = {keys["name"].GetString():[] for keys in self.settings["coupling_sequence"].values()}
         self.save_tr_data = self.settings["save_tr_data"].GetBool()
         if self.save_tr_data:
@@ -185,8 +186,10 @@ class GaussSeidelStrongCoupledSolver(CoSimulationCoupledSolver):
             self.__CommunicateIfTimeStepNeedsToBeRepeated(True)
 
             # do relaxation only if this iteration is not the last iteration of this timestep
+            t0 = time.time()
             for conv_acc in self.convergence_accelerators_list:
                 conv_acc.ComputeAndApplyUpdate()
+            t1 = time.time()
 
             for predictor in self.predictors_list:
                 if predictor.receives_data and predictor.takes_accelerated:
@@ -196,6 +199,9 @@ class GaussSeidelStrongCoupledSolver(CoSimulationCoupledSolver):
                     predictor.ReceiveNewData(input_,
                                         self.solver_wrappers[self.raw_input_solver].GetInterfaceData(self.accelerated_data).GetData().reshape((-1, 1)))
 
+            self.acceleratorTime.append(t1 - t0)
+            with open("./coSimData/accelerator_time.npy", 'wb') as f:
+                np.save(f, np.array(self.acceleratorTime))
 
     def _SaveTimes(self, solver_name, t):
         self.solvers_times[solver_name].append(t)
@@ -270,7 +276,7 @@ class GaussSeidelStrongCoupledSolver(CoSimulationCoupledSolver):
         """
 
     def _SynchronizeInputData(self, solver_name):
-        
+
         """
         if solver_name == self.accelerated_input_solver:
             self.updated_load_data.append(self.solver_wrappers[self.raw_input_solver].GetInterfaceData(self.accelerated_data).GetData().reshape((-1, 1)))
