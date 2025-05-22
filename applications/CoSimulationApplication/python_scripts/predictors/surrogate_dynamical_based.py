@@ -11,6 +11,7 @@ from rom_am.solid_rom import *
 from rom_am.fluid_surrogate import *
 from rom_am.tracked_fluid_surrogate import TrackedFluidSurrog
 from rom_am.dimreducers.rom_am.podReducer import PodReducer
+from collections import deque
 
 
 def Create(settings, solver_wrapper, solver_wrapperY):
@@ -35,6 +36,11 @@ class SurrogateDynamicalPredictor(CoSimulationPredictor):
         solidROMFileName = self.settings["file_nameSolid"].GetString()
         self.commonDispReducer = self.settings["commonDispReducer"].GetBool()
         weights = self.settings["weights"].GetBool()
+        criterion = self.settings["criterion"].GetString()
+        if criterion == "relative":
+            self.criterion = True
+        else:
+            self.criterion = False
 
         if self.commonDispReducer:
             KM.Logger.PrintWarning(
@@ -57,7 +63,9 @@ class SurrogateDynamicalPredictor(CoSimulationPredictor):
             self.solidSurrogate = pickle.load(inp)
 
         importedSolidReduc = PodReducer(.999999)
-        with open("savedROMs/dt25/solidSavedReducer.pkl", 'rb') as inp:
+        # with open("savedROMs/dt25/solidSavedReducer.pkl", 'rb') as inp:
+        # with open("savedROMs/solidSavedReducer.pkl", 'rb') as inp:
+        with open("savedROMs/dt20/solidSavedReducer.pkl", 'rb') as inp:
             importedSolidReduc = pickle.load(inp)
 
         if self.re_train_thres > 0:
@@ -84,6 +92,8 @@ class SurrogateDynamicalPredictor(CoSimulationPredictor):
         self.surrQ = None
         self.surrR = None
         self.deltaX = None
+        self.X_tilde = deque(maxlen=50)
+        self.R = deque(maxlen=50)
         self.secondPreviousX = None
         self.thirdPreviousX = None
         self.surrJac = None
@@ -96,9 +106,15 @@ class SurrogateDynamicalPredictor(CoSimulationPredictor):
 
         # The following training will only compute the regression operator,
         # the Encoder-Decoder is precomputed
-        self.solidSurrogate.train(np.load("./savedROMs/dt25/loadData_forSolid.npy"),
-                                np.load("./savedROMs/dt25/dispConvData_forSolid.npy"),
-                                np.load("./savedROMs/dt25/dispData_forSolid.npy"),
+        # self.solidSurrogate.train(np.load("./savedROMs/dt25/loadData_forSolid.npy"),
+        #                         np.load("./savedROMs/dt25/dispConvData_forSolid.npy"),
+        #                         np.load("./savedROMs/dt25/dispData_forSolid.npy"),
+        # self.solidSurrogate.train(np.load("./savedROMs/loadData_forSolid.npy"),
+        #                         np.load("./savedROMs/dispConvData_forSolid.npy"),
+        #                         np.load("./savedROMs/dispData_forSolid.npy"),
+        self.solidSurrogate.train(np.load("./savedROMs/dt20/loadData_forSolid.npy"),
+                                np.load("./savedROMs/dt20/dispConvData_forSolid.npy"),
+                                np.load("./savedROMs/dt20/dispData_forSolid.npy"),
                                 rank_pres=.999999, rank_disp=20, smoothing=1e-6,
                                 kernel="polyC", degree = 1, norm = [True, True],
                                 center=[True, True], normalization=["max", "max"],
@@ -136,6 +152,9 @@ class SurrogateDynamicalPredictor(CoSimulationPredictor):
 
 
     def Predict(self):
+        self.X_tilde = deque(maxlen=50)
+        self.R = deque(maxlen=50)
+
         if not self.interface_data.IsDefinedOnThisRank():
             return
 
@@ -188,7 +207,9 @@ class SurrogateDynamicalPredictor(CoSimulationPredictor):
                         solidSol, self.previousX[:, np.newaxis], solidReduc=dispReduc_model,
                         params = self.param_array, takes_low_dimensional_disp=True
                         ).ravel()
+                    self.X_tilde.appendleft(fluidSol)
                     newResiduals = fluidSol - pred_
+                    self.R.appendleft(newResiduals)
                     # The next two norms are squared ! but that's okay, since they are always divided by each other
                     nrm = np.dot(newResiduals, newResiduals)
                     pred_norm = np.dot(pred_, pred_)
@@ -203,9 +224,14 @@ class SurrogateDynamicalPredictor(CoSimulationPredictor):
                                 self._ClassName(), colors.darkred("X CONVERGENCE FAILED X"))
                         return
 
-                    if (nrm/pred_norm) < (self.rel_tolerance**2):
-                        isConverged = True
-                        self._local_resid = np.sqrt(nrm/pred_norm)
+                    if self.criterion:
+                        if (nrm/pred_norm) < (self.rel_tolerance**2):
+                            isConverged = True
+                            self._local_resid = np.sqrt(nrm/pred_norm)
+                    else:
+                        if (nrm/newResiduals.shape[0]) < (self.rel_tolerance**2):
+                            isConverged = True
+                            self._local_resid = np.sqrt(nrm/pred_norm)
 
                     if not isConverged:
                         if i > 1:
@@ -296,6 +322,7 @@ class SurrogateDynamicalPredictor(CoSimulationPredictor):
             "retraining_max_time" : 100,
             "file_nameFluid"              : "",
             "file_nameSolid"              : "",
+            "criterion"                   : "relative",
             "commonDispReducer"           : true,
             "save_log"                    : true,
             "jump_start"                  : true,

@@ -9,9 +9,9 @@ from collections import deque
 
 def Create(settings, solver_wrapper, solY):
     cs_tools.SettingsTypeCheck(settings)
-    return QuadraticPredictor(settings, solver_wrapper, solY)
+    return DegrootePredictor(settings, solver_wrapper, solY)
 
-class QuadraticPredictor(CoSimulationPredictor):
+class DegrootePredictor(CoSimulationPredictor):
     def __init__(self, settings, solver_wrapper, solY):
         super().__init__(settings, solver_wrapper)
 
@@ -46,7 +46,7 @@ class QuadraticPredictor(CoSimulationPredictor):
                 previous_data = current_data.copy()
                 previous_data_2 = current_data.copy()
 
-            predicted_data = 3*current_data - 3*previous_data + previous_data_2
+            predicted_data = (5/2)*current_data - 2*previous_data + .5*previous_data_2
             self._UpdateData(predicted_data)
 
     def FinalizeSolutionStep(self):

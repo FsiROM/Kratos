@@ -78,10 +78,10 @@ class ConvergenceCriteriaWrapper:
 
         is_converged = 0
         # if self.interface_data.solver_name == "fluid":
-        self.r_norms.append(np.linalg.norm(residual))
+        self.r_norms.append(np.linalg.norm(residual[2:-2]))
         with open("./coSimData/rNorm.npy", 'wb') as f:
             np.save(f, np.array(self.r_norms))
-        self.r_rel_norms.append(np.linalg.norm(residual)/np.linalg.norm(current_data))
+        self.r_rel_norms.append(np.linalg.norm(residual[2:-2])/np.linalg.norm(current_data[2:-2]))
         with open("./coSimData/rRelNorm.npy", 'wb') as f:
             np.save(f, np.array(self.r_rel_norms))
         #     self.r_.append((residual))

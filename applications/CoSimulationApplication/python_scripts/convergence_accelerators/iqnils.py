@@ -48,6 +48,9 @@ class IQNILSConvergenceAccelerator(CoSimulationConvergenceAccelerator):
         self.V_old = []
         self.W_old = []
 
+        self.receivedR = None
+        self.receivedX_tilde = None
+
     ## UpdateSolution(r, x)
     # @param r residual r_k
     # @param x solution x_k
@@ -97,11 +100,30 @@ class IQNILSConvergenceAccelerator(CoSimulationConvergenceAccelerator):
                 return delta_x
         else:  # previous vectors can be reused
             if k == 0: # first iteration
+                # if self.receivedR is not None:
+
+                #     self.v_old_matrices[0] = np.hstack((-(self.R[0] - self.receivedR).reshape((-1, 1)) , self.v_old_matrices[0]))
+                #     self.w_old_matrices[0] = np.hstack((-(self.X[0] - self.receivedX_tilde).reshape((-1, 1)) , self.w_old_matrices[0]))
+
+                #     self.V_old = np.concatenate( self.v_old_matrices, 1 )
+                #     self.W_old = np.concatenate( self.w_old_matrices, 1 )
+
+                #     self.receivedR = None
+                #     self.receivedX_tilde = None
+
                 if self.echo_level > 3:
                     cs_print_info(self._ClassName(), "Using matrices from previous time steps")
                     cs_print_info(self._ClassName(), "Number of previous matrices: ", num_old_matrices)
                 V = self.V_old
                 W = self.W_old
+
+                if self.receivedR is not None:
+
+                    V = np.hstack((V, (self.R[0] - self.receivedR).reshape((-1, 1))))
+                    W = np.hstack((W, (self.X[0] - self.receivedX_tilde).reshape((-1, 1))))
+
+                    self.receivedR = None
+                    self.receivedX_tilde = None
                 ## Solve least-squares problem
                 delta_r = -self.R[0]
                 c = np.linalg.lstsq(V, delta_r, rcond = self.epsilon)[0]
@@ -160,8 +182,18 @@ class IQNILSConvergenceAccelerator(CoSimulationConvergenceAccelerator):
         self.V_new = []
         self.W_new = []
 
-    def ReceiveJacobian(self, J):
+    def ReceiveJacobian(self, J, R, X_tilde):
         pass
+        # if len(R) > 1:
+        #     self.receivedR = R[-1].copy()
+        #     self.receivedX_tilde = X_tilde[-1].copy()
+
+
+            # self.v_old_matrices[0] = np.hstack(((R[0] - R[1]).reshape((-1, 1)) , self.v_old_matrices[0]))
+            # self.w_old_matrices[0] = np.hstack(((X_tilde[0] - X_tilde[1]).reshape((-1, 1)) , self.w_old_matrices[0]))
+
+            # self.V_old = np.concatenate( self.v_old_matrices, 1 )
+            # self.W_old = np.concatenate( self.w_old_matrices, 1 )
 
     def ReceivePredictedSol(self, newX):
         pass

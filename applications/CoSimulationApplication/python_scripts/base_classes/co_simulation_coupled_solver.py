@@ -191,7 +191,7 @@ class CoSimulationCoupledSolver(CoSimulationSolverWrapper):
 
         for predictor in self.predictors_list:
             for convAcc in self.convergence_accelerators_list:
-                convAcc.ReceiveJacobian(predictor.surrJac, predictor.surrQ, predictor.surrR, predictor.deltaX)
+                convAcc.ReceiveJacobian(predictor.surrJac, predictor.surrQ, predictor.R, predictor.deltaX, predictor.X_tilde)
 
     def InitializeSolutionStep(self):
         for solver in self.solver_wrappers.values():

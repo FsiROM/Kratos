@@ -25,8 +25,8 @@ class RelativeNormPreviousResidualConvergenceCriteria(CoSimulationConvergenceCri
         self.label = self.settings["label"].GetString()
 
     def IsConverged(self, residual, current_data):
-        res_norm = la.norm(residual)
-        norm_new_data = la.norm(current_data)
+        res_norm = la.norm(residual[2:-2])
+        norm_new_data = la.norm(current_data[2:-2])
 
         if norm_new_data < 1e-15:
             norm_new_data = 1.0 # to avoid division by zero

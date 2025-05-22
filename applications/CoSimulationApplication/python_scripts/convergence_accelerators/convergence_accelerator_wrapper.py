@@ -67,8 +67,8 @@ class ConvergenceAcceleratorWrapper:
     def ComputeAndApplyUpdate(self):
         if not self.interface_data.IsDefinedOnThisRank(): return
 
-        residual = self.residual_computation.ComputeResidual(self.input_data)
-        input_data_for_acc = self.input_data
+        residual = self.residual_computation.ComputeResidual(self.input_data)[2:-2]
+        input_data_for_acc = self.input_data[2:-2]
 
         if self.gather_scatter_required:
             residual = np.array(np.concatenate(self.data_comm.GathervDoubles(residual, 0)))
@@ -85,13 +85,14 @@ class ConvergenceAcceleratorWrapper:
 
             updated_data = self.data_comm.ScattervDoubles(data_to_scatter, 0)
 
-        self.interface_data.SetData(updated_data)
+        self.interface_data.SetData(np.concatenate(
+                    (np.array([0, 0]), updated_data, np.array([0, 0]))))
         #self.accelerated_load_data.append(self.interface_data.GetData().reshape((-1, 1)))
         # np.save("./coSimData/Acceleratedload_data.npy",
         #         np.asarray(self.accelerated_load_data)[:, :, 0].T)
 
-    def ReceiveJacobian(self, J, Q, R, deltaX):
-        self.conv_acc.ReceiveJacobian(J)
+    def ReceiveJacobian(self, J, Q, R, deltaX, X_tilde):
+        self.conv_acc.ReceiveJacobian(J, R, X_tilde)
 
     def PrintInfo(self):
         self.conv_acc.PrintInfo()
