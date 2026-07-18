@@ -21,6 +21,8 @@ class ConstantPredictor(CoSimulationPredictor):
         self.surrQ = None
         self.surrR = None
         self.deltaX = None
+        self.R = None
+        self.X_tilde = None
 
     def ReceiveTime(self, t):
         self.currentT = t
