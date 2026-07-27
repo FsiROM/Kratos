@@ -40,6 +40,12 @@ class ConvergenceAcceleratorWrapper:
                 self.data_comm = self.interface_data.GetModelPart().GetCommunicator().GetDataCommunicator()
                 self.sizes_from_ranks = np.cumsum(self.data_comm.GatherInts([self.interface_data.Size()], 0))
 
+        self.removed_dofs = []
+        if settings.Has("removed_dofs"):
+            self.removed_dofs = [i.GetInt() for i in settings["removed_dofs"]]
+        self.orig_size = None
+        self.mask      = None
+
     def Initialize(self):
         self.conv_acc.Initialize()
 
@@ -67,8 +73,16 @@ class ConvergenceAcceleratorWrapper:
     def ComputeAndApplyUpdate(self):
         if not self.interface_data.IsDefinedOnThisRank(): return
 
-        residual = self.residual_computation.ComputeResidual(self.input_data)[2:-2]
-        input_data_for_acc = self.input_data[2:-2]
+        residual = self.residual_computation.ComputeResidual(self.input_data)
+        input_data_for_acc = self.input_data
+
+        if self.orig_size is None:
+            self.orig_size         = len(residual)
+            pos_indices            = [i % self.orig_size for i in self.removed_dofs]
+            self.mask              = np.ones(self.orig_size, dtype=bool)
+            self.mask[pos_indices] = False
+        residual = np.delete(residual, self.removed_dofs)
+        input_data_for_acc = np.delete(input_data_for_acc, self.removed_dofs)
 
         if self.gather_scatter_required:
             residual = np.array(np.concatenate(self.data_comm.GathervDoubles(residual, 0)))
@@ -85,11 +99,10 @@ class ConvergenceAcceleratorWrapper:
 
             updated_data = self.data_comm.ScattervDoubles(data_to_scatter, 0)
 
-        self.interface_data.SetData(np.concatenate(
-                    (np.array([0, 0]), updated_data, np.array([0, 0]))))
-        #self.accelerated_load_data.append(self.interface_data.GetData().reshape((-1, 1)))
-        # np.save("./coSimData/Acceleratedload_data.npy",
-        #         np.asarray(self.accelerated_load_data)[:, :, 0].T)
+        updated_data_complete = np.empty(self.orig_size)
+        updated_data_complete[self.removed_dofs] = 0
+        updated_data_complete[self.mask] = updated_data
+        self.interface_data.SetData(updated_data_complete)
 
     def ReceiveJacobian(self, J, Q, R, deltaX, X_tilde):
         self.conv_acc.ReceiveJacobian(J, R, X_tilde)

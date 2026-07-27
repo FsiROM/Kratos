@@ -49,8 +49,9 @@ class CoSimulationConvergenceCriteria:
     @classmethod
     def _GetDefaultParameters(cls):
         return KM.Parameters("""{
-            "type"       : "UNSPECIFIED",
-            "solver"     : "UNSPECIFIED",
-            "data_name"  : "UNSPECIFIED",
-            "echo_level" : 0
+            "type"         : "UNSPECIFIED",
+            "solver"       : "UNSPECIFIED",
+            "data_name"    : "UNSPECIFIED",
+            "echo_level"   : 0,
+            "removed_dofs" : []
         }""")

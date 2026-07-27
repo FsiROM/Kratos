@@ -23,10 +23,13 @@ class RelativeNormPreviousResidualConvergenceCriteria(CoSimulationConvergenceCri
         self.abs_tolerance = self.settings["abs_tolerance"].GetDouble()
         self.rel_tolerance = self.settings["rel_tolerance"].GetDouble()
         self.label = self.settings["label"].GetString()
+        self.removed_dofs = []
+        if settings.Has("removed_dofs"):
+            self.removed_dofs = [i.GetInt() for i in settings["removed_dofs"]]
 
     def IsConverged(self, residual, current_data):
-        res_norm = la.norm(residual[2:-2])
-        norm_new_data = la.norm(current_data[2:-2])
+        res_norm = la.norm(np.delete(residual, self.removed_dofs))
+        norm_new_data = la.norm(np.delete(current_data, self.removed_dofs))
 
         if norm_new_data < 1e-15:
             norm_new_data = 1.0 # to avoid division by zero

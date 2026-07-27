@@ -61,6 +61,7 @@ class CoSimulationConvergenceAccelerator:
     @classmethod
     def _GetDefaultParameters(cls):
         return KM.Parameters("""{
-            "type"       : "UNSPECIFIED",
-            "echo_level" : 0
+            "type"         : "UNSPECIFIED",
+            "echo_level"   : 0,
+            "removed_dofs" : []
         }""")

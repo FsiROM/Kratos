@@ -10,14 +10,11 @@ import pickle
 from rom_am.solid_rom import *
 from rom_am.fluid_surrogate import *
 from rom_am.tracked_fluid_surrogate import TrackedFluidSurrog
-from rom_am.dimreducers.rom_am.podReducer import PodReducer
-from collections import deque
-
+# from collections import deque
 
 def Create(settings, solver_wrapper, solver_wrapperY):
     cs_tools.SettingsTypeCheck(settings)
     return SurrogateDynamicalPredictor(settings, solver_wrapper, solver_wrapperY)
-
 
 class SurrogateDynamicalPredictor(CoSimulationPredictor):
     def __init__(self, settings, solver_wrapper, solver_wrapperY):
@@ -48,25 +45,27 @@ class SurrogateDynamicalPredictor(CoSimulationPredictor):
         self.re_train_thres = self.settings["re_train_thres"].GetInt()
         self.updateThres = self.settings["update_thres"].GetInt()
         self.extrap_order = self.settings["extrapolation_order"].GetInt()
-        self.param_0_value = self.settings["param_0_value"].GetDouble()
-        self.param_1_value = 100*self.settings["param_1_value"].GetDouble()
-        self.param_array =np.array([[self.param_0_value], [self.param_1_value]])
+
+        params_list = [i.GetDouble() for i in settings["params"]]
+        self.param_array = np.array(params_list).reshape((-1, 1))
+
+        # self.param_0_value = self.settings["param_0_value"].GetDouble()
+        # self.param_1_value = 100*self.settings["param_1_value"].GetDouble()
+        # self.param_1_value = self.settings["param_1_value"].GetDouble()
+        # --- Lid Driven ---
+        # self.param_array =np.array([[self.param_0_value], [self.param_1_value]])
+        # --- Double Flap ---
+        # self.param_array =np.array([[self.param_0_value]])
+
         self.stepsize = self.settings["stepsize"].GetDouble()
         if self.stepsize < 0:
             self.stepsize = None
-        # self.fluidSurrogate = FluidSurrog()
         self.fluidSurrogate = TrackedFluidSurrog()
         with open(fluidSurrofFileName, 'rb') as inp:
             self.fluidSurrogate = pickle.load(inp)
-        self.solidSurrogate = FluidSurrog(maxLen = 11000)
+        self.solidSurrogate = FluidSurrog()
         with open(solidROMFileName, 'rb') as inp:
             self.solidSurrogate = pickle.load(inp)
-
-        importedSolidReduc = PodReducer(.999999)
-        # with open("savedROMs/dt25/solidSavedReducer.pkl", 'rb') as inp:
-        # with open("savedROMs/solidSavedReducer.pkl", 'rb') as inp:
-        with open("savedROMs/dt20/solidSavedReducer.pkl", 'rb') as inp:
-            importedSolidReduc = pickle.load(inp)
 
         if self.re_train_thres > 0:
             self.fluidSurrogate.reTrainThres = self.re_train_thres
@@ -75,8 +74,6 @@ class SurrogateDynamicalPredictor(CoSimulationPredictor):
             self.fluidSurrogate.updateThres = self.updateThres
         self.solidSurrogate.weights = weights
         self.fluidSurrogate.weights = weights
-
-
 
         self._local_iter = None
         self._success = None
@@ -92,36 +89,23 @@ class SurrogateDynamicalPredictor(CoSimulationPredictor):
         self.surrQ = None
         self.surrR = None
         self.deltaX = None
-        self.X_tilde = deque(maxlen=50)
-        self.R = deque(maxlen=50)
+        self.X_tilde = None
+        self.R = None
         self.secondPreviousX = None
         self.thirdPreviousX = None
         self.surrJac = None
-        self.interface_dataYvel = solver_wrapperY.GetInterfaceData("velocity")
+        self.interface_dataYvel = solver_wrapperY.GetInterfaceData("velocity") # To remove for quasi-statics
         self.interface_dataY = solver_wrapperY.GetInterfaceData("disp")
         self.takes_accelerated = False
         self.predictorTime = []
 
-        self.fluidSurrogate.initialize_predictions(self.param_array)
+        self.fluidSurrogate.initialize_predictions(self.param_array) # from ROM to TRACK ROM
 
-        # The following training will only compute the regression operator,
-        # the Encoder-Decoder is precomputed
-        # self.solidSurrogate.train(np.load("./savedROMs/dt25/loadData_forSolid.npy"),
-        #                         np.load("./savedROMs/dt25/dispConvData_forSolid.npy"),
-        #                         np.load("./savedROMs/dt25/dispData_forSolid.npy"),
-        # self.solidSurrogate.train(np.load("./savedROMs/loadData_forSolid.npy"),
-        #                         np.load("./savedROMs/dispConvData_forSolid.npy"),
-        #                         np.load("./savedROMs/dispData_forSolid.npy"),
-        self.solidSurrogate.train(np.load("./savedROMs/dt20/loadData_forSolid.npy"),
-                                np.load("./savedROMs/dt20/dispConvData_forSolid.npy"),
-                                np.load("./savedROMs/dt20/dispData_forSolid.npy"),
-                                rank_pres=.999999, rank_disp=20, smoothing=1e-6,
-                                kernel="polyC", degree = 1, norm = [True, True],
-                                center=[True, True], normalization=["max", "max"],
-                                norm_regr = "max",
-                                solidReduc=self.fluidSurrogate.reducLoad,
-                                precomputedReducLoad = importedSolidReduc)
-
+        self.removed_dofs = []
+        if self.settings.Has("removed_dofs"):
+            self.removed_dofs = [i.GetInt() for i in settings["removed_dofs"]]
+        self.orig_size = None
+        self.mask      = None
 
     def ReceiveNewData(self, newDisp, newLoad):
         if self.currentT >= self.launch_retrain and self.currentT <= self.max_retrain:
@@ -131,36 +115,44 @@ class SurrogateDynamicalPredictor(CoSimulationPredictor):
                     dispReduc_model = self.solidSurrogate.reducLoad
                 else:
                     dispReduc_model = None
+                # newFedLoad = newLoad[2:-2, [0]]
+                # newFedLoad = np.delete(newLoad[:-2, [0]], [2*118, 2*118+1], axis = 0)
+                newFedLoad = np.delete(newLoad, self.removed_dofs, axis = 0)
                 self.fluidSurrogate.augmentData(
-                    newDisp, prevX, newLoad[2:-2, [0]], self.currentT,
-                    params = self.param_array,
+                    newDisp, prevX, newFedLoad, self.currentT,
+                    params = self.param_array, # from ROM to TRACK ROM
                     solidReduc = dispReduc_model,
-                    stepsize=self.stepsize
+                    stepsize=self.stepsize # # from ROM to TRACK ROM
                     )
 
     def ReceiveNewDataS(self, newLoad, newDisp):
         if self.currentT >= self.launch_retrain and self.currentT <= self.max_retrain:
             if self.previousY is not None:
                 prevY = self.previousY.reshape((-1, 1))
-                prevY = np.vstack((prevY, self.previousYvel.reshape((-1, 1))))
+                prevY = np.vstack((prevY, self.previousYvel.reshape((-1, 1)))) # Deactivate for quasi-statics
                 if self.commonDispReducer:
                     loadReduc_model = self.fluidSurrogate.reducLoad
                 else:
                     loadReduc_model = None
+                newFedLoad = np.delete(newLoad, self.removed_dofs, axis = 0)
                 self.solidSurrogate.augmentData(
-                    newLoad[2:-2, [0]], prevY, newDisp, self.currentT, solidReduc=loadReduc_model, changeTheBasis=self.fluidSurrogate.sendSignalBasis)
+                    newFedLoad, prevY, newDisp, self.currentT, solidReduc=loadReduc_model, changeTheBasis=self.fluidSurrogate.sendSignalBasis)
 
 
     def Predict(self):
-        self.X_tilde = deque(maxlen=50)
-        self.R = deque(maxlen=50)
-
         if not self.interface_data.IsDefinedOnThisRank():
             return
 
+        if self.orig_size is None:
+            self.orig_size         = len(self.interface_data.GetData(0))
+            pos_indices            = [i % self.orig_size for i in self.removed_dofs]
+            self.mask              = np.ones(self.orig_size, dtype=bool)
+            self.mask[pos_indices] = False
+
         if self.currentT >= self.launch_time:
             w = self.w0
-            current_data = self.interface_data.GetData(0)[2:-2]
+            # current_data = np.delete(self.interface_data.GetData(0)[:-2], [2*118, 2*118+1])
+            current_data = np.delete(self.interface_data.GetData(0), self.removed_dofs)
             if self.extrap_order > 0:
                 if self.secondPreviousX is not None:
                     previous_data = self.secondPreviousX.ravel()
@@ -182,7 +174,8 @@ class SurrogateDynamicalPredictor(CoSimulationPredictor):
             else:
                 initial_data = current_data.copy()
 
-            pred_ = initial_data.copy()
+            pred_ = initial_data
+            previousX_reshaped = self.previousX[:, np.newaxis]
             isConverged = False
 
             if self.previousX is not None:
@@ -198,18 +191,21 @@ class SurrogateDynamicalPredictor(CoSimulationPredictor):
                     else:
                         loadReduc_model = None
                     solidSol = self.solidSurrogate.predict(pred_.reshape(
-                        (-1, 1)), previousYsol, solidReduc=loadReduc_model, predict_low_dimensional=True)
+                        (-1, 1)), previousYsol, solidReduc=loadReduc_model,
+                        predict_low_dimensional=True # from ROM to TRACK ROM
+                        )
                     if self.commonDispReducer:
                         dispReduc_model = self.solidSurrogate.reducLoad
                     else:
                         dispReduc_model = None
                     fluidSol = self.fluidSurrogate.predict(
-                        solidSol, self.previousX[:, np.newaxis], solidReduc=dispReduc_model,
-                        params = self.param_array, takes_low_dimensional_disp=True
+                        solidSol, previousX_reshaped, solidReduc=dispReduc_model,
+                        params = self.param_array, # from ROM to TRACK ROM
+                        takes_low_dimensional_disp=True # from ROM to TRACK ROM
                         ).ravel()
-                    self.X_tilde.appendleft(fluidSol)
+                    # self.X_tilde.appendleft(fluidSol)
                     newResiduals = fluidSol - pred_
-                    self.R.appendleft(newResiduals)
+                    # self.R.appendleft(newResiduals)
                     # The next two norms are squared ! but that's okay, since they are always divided by each other
                     nrm = np.dot(newResiduals, newResiduals)
                     pred_norm = np.dot(pred_, pred_)
@@ -250,8 +246,12 @@ class SurrogateDynamicalPredictor(CoSimulationPredictor):
                 if self.echo_level > 0:
                     cs_tools.cs_print_info(self._ClassName(), colors.darkgreen(
                         "# CONVERGENCE WAS ACHIEVED #"))
-                self._UpdateData(np.concatenate(
-                    (np.array([0, 0]), pred_, np.array([0, 0])))) # corners
+                # fed_updated_data = np.concatenate(
+                #     (pred_[:2*118], np.array([0, 0]), pred_[2*118:], np.array([0, 0])))
+                fed_updated_data = np.empty(self.orig_size)
+                fed_updated_data[self.removed_dofs] = 0
+                fed_updated_data[self.mask] = pred_
+                self._UpdateData(fed_updated_data) # corners
             else:
                 self._success = 0
                 if self.echo_level > 0:
@@ -285,7 +285,8 @@ class SurrogateDynamicalPredictor(CoSimulationPredictor):
                 if self.secondPreviousX is not None:
                     self.thirdPreviousX = self.secondPreviousX.copy()
             self.secondPreviousX = self.previousX.copy()
-        self.previousX = self.interface_data.GetData().copy()[2:-2]
+        # self.previousX = np.delete(self.interface_data.GetData().copy()[:-2], [2*118, 2*118+1])
+        self.previousX = np.delete(self.interface_data.GetData().copy(), self.removed_dofs)
         self.previousY = self.interface_dataY.GetData().copy()
         self.previousYvel = self.interface_dataYvel.GetData().copy()
         if self.save_log:
@@ -329,10 +330,10 @@ class SurrogateDynamicalPredictor(CoSimulationPredictor):
             "extrapolation_order"         : 1,
             "re_train_thres"              : -1,
             "update_thres"                : -1,
-            "param_0_value"               : 1.0,
-            "param_1_value"               : 1.0,
+            "params"                      : [],
             "stepsize"                    : -1,
-            "weights"                     : false
+            "weights"                     : false,
+            "removed_dofs"                : []
         }""")
         this_defaults.AddMissingParameters(super()._GetDefaultParameters())
         return this_defaults
